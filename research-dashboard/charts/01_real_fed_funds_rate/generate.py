@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    annotate_last_point_percentile, COLOR_ACCENT
+    annotate_last_point_percentile, add_freshness_subtitle, COLOR_ACCENT
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
 
@@ -71,25 +71,31 @@ def generate():
             label="Taux réel (Fed Funds - Core PCE YoY)")
     ax.axhline(0, color="#999999", linewidth=0.8)
 
-    format_date_axis(ax)
+    last_row = df.iloc[-1]
+    format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("%", fontsize=9)
     ax.set_title("Taux directeur réel (Fed Funds - Core PCE YoY)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
+    add_freshness_subtitle(ax, last_row["date"])
     ax.legend(loc="upper left", fontsize=8.5, frameon=False)
 
-    last_row = df.iloc[-1]
     annotate_last_point_percentile(
-        ax, last_row["date"], last_row["real_rate"], df["real_rate"], years_label=f"{HISTORY_YEARS} ans"
+        ax, last_row["date"], last_row["real_rate"], df["real_rate"],
+        years_label=f"{HISTORY_YEARS} ans",
+        value_label=f"{last_row['real_rate']:.1f}%",
     )
 
-    add_source_footer(fig, "Source: FRED (FEDFUNDS, PCEPILFE) | Calcul: taux nominal - Core PCE YoY")
+    add_source_footer(
+        fig, "Source: FRED (FEDFUNDS, PCEPILFE) | Calcul: taux nominal - Core PCE YoY",
+        as_of_date=last_row["date"],
+    )
 
     period_label = get_current_period_label()
     out_dir = os.path.join(OUTPUT_DIR, period_label)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "01_real_fed_funds_rate.png")
 
-    fig.tight_layout(rect=[0, 0.03, 1, 1])
+    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 

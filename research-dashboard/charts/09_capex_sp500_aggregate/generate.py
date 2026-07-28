@@ -145,12 +145,17 @@ def compute_capex_by_company(years: int = DISPLAY_YEARS, constituents: pd.DataFr
     # un trimestre où beaucoup moins d'entreprises ont publié que la normale
     # est presque toujours un trimestre pas encore complètement remonté dans
     # EDGAR au moment du run (pas un vrai effondrement du capex). On l'exclut
-    # plutôt que d'afficher un total faussé vers le bas -- sans ce garde-fou,
-    # le dernier trimestre affiché peut apparaître comme un effondrement
-    # brutal du capex alors que ce n'est qu'un problème de fraîcheur des
-    # données.
-    max_coverage = max(len(v) for v in raw_by_quarter.values())
-    min_coverage = max(1, max_coverage // 2)
+    # plutôt que d'afficher un total faussé vers le bas.
+    #
+    # Important : le seuil se base sur la MÉDIANE de couverture, pas le
+    # maximum. Sur les ~500 constituants du S&P 500, un seul trimestre par an
+    # concentre souvent une couverture anormalement élevée (le calendrier
+    # fiscal fait qu'un trimestre civil capte plus de dépôts 10-K annuels que
+    # les autres) -- un seuil basé sur ce pic exclurait à tort la majorité des
+    # trimestres pourtant parfaitement valides.
+    coverage_counts = [len(v) for v in raw_by_quarter.values()]
+    median_coverage = pd.Series(coverage_counts).median()
+    min_coverage = max(1, int(median_coverage * 0.5))
 
     records = []
     for quarter_end, matched in raw_by_quarter.items():

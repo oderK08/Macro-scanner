@@ -66,4 +66,197 @@ def _get_merged_frame_for_period(period: str) -> dict:
     Bug corrigé : l'ancienne version prenait le PREMIER concept renvoyant des
     données globalement, puis abandonnait les autres concepts pour cette
     période -- ce qui excluait silencieusement, sur TOUTE la fenêtre, toute
-    entreprise taguant son capex avec un
+    entreprise taguant son capex avec un concept différent du premier trouvé
+    (ex: si Amazon ou Apple utilisent un tag XBRL différent de
+    PaymentsToAcquirePropertyPlantAndEquipment, ils disparaissaient
+    entièrement du graphique sans aucun message d'erreur).
+
+    Retourne un dict {cik: value}, en préférant la valeur du premier concept
+    de la liste si une entreprise est présente dans plusieurs concepts.
+    """
+    combined = {}
+    for concept in CAPEX_XBRL_CONCEPTS:
+        frame_df = get_frame(concept, period)
+        if frame_df.empty:
+            continue
+        for _, row in frame_df.iterrows():
+            cik = int(row["cik"])
+            if cik not in combined:  # le premier concept trouvé pour ce CIK gagne
+                combined[cik] = row["value"]
+    return combined
+
+
+def compute_capex_by_company(years: int = DISPLAY_YEARS, tickers: list = None) -> pd.DataFrame:
+    """
+    Retourne un DataFrame long: date, ticker, capex_billions.
+    Récupère `years + 1` ans de données (l'année en plus sert uniquement à
+    pouvoir calculer la tendance annuelle glissante -- TTM -- dès le premier
+    trimestre affiché).
+    """
+    if tickers is None:
+        tickers = SP500_LARGE_CAP_SAMPLE
+
+    ticker_to_cik = get_ticker_to_cik_map()
+    cik_to_ticker = {}
+    ciks = set()
+    for t in tickers:
+        cik = ticker_to_cik.get(t.upper())
+        if cik is not None:
+            cik_int = int(cik)
+            ciks.add(cik_int)
+            cik_to_ticker[cik_int] = t.upper()
+
+    current_year = datetime.today().year
+    start_year = current_year - years - 1  # +1 an de marge pour le calcul TTM
+
+    records = []
+    for year in range(start_year, current_year + 1):
+        for quarter in [1, 2, 3, 4]:
+            period = f"CY{year}Q{quarter}"
+
+            combined = _get_merged_frame_for_period(period)
+            if not combined:
+                continue
+
+            quarter_end = _quarter_end_date(year, quarter)
+            for cik, value in combined.items():
+                if cik not in ciks:
+                    continue
+                records.append({
+                    "date": quarter_end,
+                    "ticker": cik_to_ticker.get(cik, f"CIK{cik}"),
+                    "capex_billions": value / 1e9,
+                })
+
+    return pd.DataFrame(records)
+
+
+def _build_pivot_and_ttm(df_long: pd.DataFrame, years: int, top_n: int):
+    """
+    Transforme le DataFrame long en table pivot (date x ticker), calcule le
+    TTM (somme glissante 4 trimestres) sur la fenêtre étendue, puis restreint
+    tout à la fenêtre d'affichage réelle (`years`).
+
+    Retourne (pivot_display, ttm_display, top_tickers).
+    """
+    pivot = df_long.pivot_table(index="date", columns="ticker", values="capex_billions", aggfunc="sum")
+    pivot = pivot.sort_index().fillna(0)
+
+    # TTM calculé sur la fenêtre ÉTENDUE (avant de couper), pour que le
+    # premier trimestre affiché ait bien 4 trimestres d'historique derrière lui.
+    total_per_quarter = pivot.sum(axis=1)
+    ttm = total_per_quarter.rolling(window=4).sum()
+
+    # Fenêtre d'affichage réelle : les derniers `years` ans seulement
+    date_min_display = pivot.index.max() - pd.DateOffset(years=years)
+    pivot_display = pivot[pivot.index >= date_min_display]
+    ttm_display = ttm[ttm.index >= date_min_display]
+
+    # Top N contributeurs sur la fenêtre affichée (pas la fenêtre étendue)
+    totals_by_ticker = pivot_display.sum(axis=0).sort_values(ascending=False)
+    top_tickers = list(totals_by_ticker.head(top_n).index)
+
+    return pivot_display, ttm_display, top_tickers
+
+
+def generate():
+    df_long = compute_capex_by_company()
+
+    if df_long.empty:
+        raise RuntimeError(
+            "[09_capex_sp500_aggregate] Aucune donnée récupérée depuis EDGAR frames. "
+            "Vérifie EDGAR_USER_AGENT et la connectivité réseau vers data.sec.gov / sec.gov."
+        )
+
+    pivot, ttm, top_tickers = _build_pivot_and_ttm(df_long, DISPLAY_YEARS, TOP_N)
+
+    if pivot.empty:
+        raise RuntimeError(
+            "[09_capex_sp500_aggregate] Pas assez de données sur la fenêtre d'affichage "
+            f"({DISPLAY_YEARS} ans) pour générer le graphique."
+        )
+
+    other_tickers = [t for t in pivot.columns if t not in top_tickers]
+    pivot["Autres"] = pivot[other_tickers].sum(axis=1) if other_tickers else 0.0
+    plot_columns = top_tickers + ["Autres"]
+
+    fig, ax = setup_figure()
+    ax2 = ax.twinx()
+    ax2.patch.set_visible(False)
+
+    # Barres empilées : une couleur par contributeur principal + gris pour "Autres"
+    bottom = pd.Series(0.0, index=pivot.index)
+    bar_width = 70  # jours, adapté à un espacement trimestriel
+    bars_for_legend = []
+    for i, col in enumerate(plot_columns):
+        color = BAR_COLORS[i % len(BAR_COLORS)]
+        bar = ax.bar(pivot.index, pivot[col], bottom=bottom, width=bar_width,
+                      color=color, label=col, zorder=3)
+        bars_for_legend.append(bar)
+        bottom = bottom + pivot[col]
+
+    # Tendance annuelle (TTM) superposée sur l'axe secondaire
+    line_ttm, = ax2.plot(ttm.index, ttm.values, color=COLOR_TTM_LINE, linewidth=2.0,
+                          marker="o", markersize=4, label="Tendance annuelle (TTM, éch. droite)", zorder=5)
+
+    last_date = pivot.index.max()
+    format_date_axis(ax, tight_to_last_point=last_date)
+    ax.set_ylabel("Capex trimestriel (Milliards USD)", fontsize=9)
+    ax2.set_ylabel("Capex annuel glissant -- TTM (Milliards USD)", fontsize=9, color=COLOR_TTM_LINE)
+    ax2.tick_params(colors=COLOR_TTM_LINE, labelsize=9)
+    ax2.spines["top"].set_visible(False)
+
+    ax.set_title(f"Capex par principal contributeur — {DISPLAY_YEARS} dernières années",
+                 fontsize=13, fontweight="bold", color="#222222", loc="left")
+    add_freshness_subtitle(ax, last_date)
+
+    handles = [b[0] for b in bars_for_legend] + [line_ttm]
+    labels = plot_columns + [line_ttm.get_label()]
+    ax.legend(handles, labels, loc="upper left", fontsize=7.5, frameon=False, ncol=2)
+
+    last_total = pivot.loc[last_date, plot_columns].sum()
+    ax.annotate(
+        f"${last_total:.0f}Md ce trimestre",
+        xy=(last_date, last_total),
+        xytext=(8, 10),
+        textcoords="offset points",
+        fontsize=8.5,
+        color=COLOR_ACCENT,
+        fontweight="bold",
+    )
+
+    if not ttm.dropna().empty:
+        last_ttm_date = ttm.dropna().index[-1]
+        last_ttm_value = ttm.dropna().iloc[-1]
+        ax2.annotate(
+            f"${last_ttm_value:.0f}Md sur 12 mois glissants",
+            xy=(last_ttm_date, last_ttm_value),
+            xytext=(8, -14),
+            textcoords="offset points",
+            fontsize=8.5,
+            color=COLOR_TTM_LINE,
+            fontweight="bold",
+        )
+
+    add_source_footer(
+        fig,
+        f"Source: SEC EDGAR (frames API) | Top {TOP_N} contributeurs sur un échantillon de "
+        f"{len(SP500_LARGE_CAP_SAMPLE)} grandes capitalisations, pas l'indice S&P 500 complet",
+        as_of_date=last_date,
+    )
+
+    period_label = get_current_period_label()
+    out_dir = os.path.join(OUTPUT_DIR, period_label)
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, "09_capex_sp500_aggregate.png")
+
+    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+    print(f"[09_capex_sp500_aggregate] Graphique sauvegardé: {out_path}")
+    return out_path
+
+
+if __name__ == "__main__":
+    generate()

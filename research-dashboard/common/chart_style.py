@@ -7,6 +7,7 @@ TOUS les graphiques du projet (couleurs, police, logo, etc.).
 """
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.transforms as transforms
 import pandas as pd
 import numpy as np
 
@@ -46,6 +47,14 @@ def add_recession_bands(ax, date_min=None, date_max=None, label_first=True):
     Ajoute les bandes grisées de récession NBER en fond de graphique.
     Si label_first=True, ajoute un petit label discret sur la première bande
     visible pour que le lecteur comprenne ce que représente le gris.
+
+    Important : le label utilise un transform "mixte" (x en coordonnées de
+    données, y en fraction des axes) plutôt que l'échelle Y réelle. Ça le
+    rend indépendant du moment où cette fonction est appelée par rapport à
+    ax.plot() -- avant, l'échelle Y n'est pas encore définie par les vraies
+    données (matplotlib utilise 0-1 par défaut), et un positionnement basé
+    sur ylim() à ce stade placerait le label n'importe où une fois les
+    vraies données tracées.
     """
     first_labeled = False
     for start, end in NBER_RECESSIONS:
@@ -58,11 +67,11 @@ def add_recession_bands(ax, date_min=None, date_max=None, label_first=True):
         ax.axvspan(start_dt, end_dt, color=COLOR_RECESSION, alpha=0.5, zorder=0)
 
         if label_first and not first_labeled:
-            ylim = ax.get_ylim()
-            y_pos = ylim[1] - (ylim[1] - ylim[0]) * 0.04
+            blended_transform = transforms.blended_transform_factory(ax.transData, ax.transAxes)
             ax.text(
-                start_dt, y_pos, " Récession", fontsize=7, color="#999999",
+                start_dt, 0.97, " Récession", fontsize=7, color="#999999",
                 ha="left", va="top", style="italic",
+                transform=blended_transform,
             )
             first_labeled = True
 
@@ -124,7 +133,7 @@ def add_freshness_subtitle(ax, as_of_date):
     """Ajoute une petite ligne 'Données au JJ/MM/AAAA' sous le titre."""
     date_str = pd.to_datetime(as_of_date).strftime("%d/%m/%Y")
     ax.text(
-        0.0, 1.06, f"Données au {date_str}",
+        0.0, 1.09, f"Données au {date_str}",
         transform=ax.transAxes, fontsize=8.5, color="#888888", ha="left",
     )
 

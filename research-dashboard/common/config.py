@@ -62,34 +62,46 @@ CAPEX_XBRL_CONCEPTS = [
     "PaymentsToAcquireProductiveAssets",
 ]
 
-# Échantillon statique de grandes capitalisations US pour le calcul du
-# capex agrégé (chart 09). Il n'existe PAS de liste "S&P 500" directement
-# interrogeable sur EDGAR -- on utilise donc une liste maintenue à la main.
+# Échantillon statique de grandes capitalisations US, organisé par secteur.
+# Il n'existe PAS de liste "S&P 500" directement interrogeable sur EDGAR --
+# on utilise donc une liste maintenue à la main.
 #
 # IMPORTANT : ceci est un échantillon représentatif de grandes capitalisations
-# réparties sur plusieurs secteurs (tech, finance, santé, industrie, énergie,
-# consommation, télécoms, utilities), PAS la liste exacte et à jour des 500
+# réparties sur plusieurs secteurs, PAS la liste exacte et à jour des 500
 # constituants du S&P 500. La composition du S&P 500 change plusieurs fois
 # par an (ajouts/retraits) ; cette liste n'est pas synchronisée
 # automatiquement avec ces changements. À réviser/étoffer manuellement de
-# temps en temps si tu veux affiner la couverture -- voir le README du chart
-# 09 pour le détail de cette limitation.
-SP500_LARGE_CAP_SAMPLE = [
-    # Technologie / communication
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "ORCL", "CSCO", "IBM",
-    "INTC", "ADBE", "CRM", "AVGO",
-    # Finance
-    "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "BLK",
-    # Santé
-    "JNJ", "PFE", "UNH", "MRK", "ABBV", "TMO", "ABT",
-    # Industrie
-    "BA", "CAT", "GE", "HON", "UPS", "LMT", "RTX", "MMM",
-    # Énergie
-    "XOM", "CVX", "COP", "SLB",
-    # Consommation
-    "WMT", "PG", "KO", "PEP", "MCD", "NKE", "HD", "COST", "DIS",
-    # Télécoms
-    "T", "VZ",
-    # Utilities
-    "NEE", "DUK",
+# temps en temps si tu veux affiner la couverture -- voir les README des
+# charts 09/11/12 pour le détail de cette limitation.
+SECTOR_TICKERS = {
+    "Technologie": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "ORCL", "CSCO", "IBM",
+                    "INTC", "ADBE", "CRM", "AVGO"],
+    "Finance": ["JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "BLK"],
+    "Santé": ["JNJ", "PFE", "UNH", "MRK", "ABBV", "TMO", "ABT"],
+    "Industrie": ["BA", "CAT", "GE", "HON", "UPS", "LMT", "RTX", "MMM"],
+    "Énergie": ["XOM", "CVX", "COP", "SLB"],
+    "Consommation": ["WMT", "PG", "KO", "PEP", "MCD", "NKE", "HD", "COST", "DIS"],
+    "Télécoms": ["T", "VZ"],
+    "Utilities": ["NEE", "DUK"],
+}
+
+# Liste plate dérivée de SECTOR_TICKERS -- utilisée par le chart 09 (capex
+# agrégé) qui n'a pas besoin de la distinction par secteur.
+SP500_LARGE_CAP_SAMPLE = [ticker for tickers in SECTOR_TICKERS.values() for ticker in tickers]
+
+# Concepts XBRL candidats pour le chiffre d'affaires (fallback, comme pour le
+# capex -- toutes les entreprises ne taguent pas leurs revenus pareil).
+REVENUE_XBRL_CONCEPTS = [
+    "Revenues",
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "SalesRevenueNet",
 ]
+
+# Concept XBRL pour le résultat opérationnel (généralement stable d'une
+# entreprise à l'autre, moins besoin de fallback que revenus/capex).
+OPERATING_INCOME_XBRL_CONCEPTS = ["OperatingIncomeLoss"]
+
+# Concepts XBRL candidats pour les stocks/inventaires (poste de bilan, donc
+# concept "instant", pas "duration" -- voir chart 12 pour la nuance de format
+# de période EDGAR que ça implique).
+INVENTORY_XBRL_CONCEPTS = ["InventoryNet"]

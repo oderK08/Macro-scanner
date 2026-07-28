@@ -1,20 +1,35 @@
-# 06 — Chicago Fed NFCI (conditions financières)
+# 06 — Chicago Fed National Financial Conditions Index (NFCI)
 
-## Séries / sources
-FRED: NFCI (Chicago Fed National Financial Conditions Index)
+## Série FRED utilisée
+- `NFCI` : indice composite hebdomadaire de la Fed de Chicago
 
-## Statut
-STUB — squelette à compléter. Voir `generate.py` dans ce dossier pour la
-structure attendue (mêmes conventions que les charts 01 et 02 déjà
-implémentés : cache incrémental, fenêtre glissante 10 ans, style partagé
-`common/chart_style.py`, sortie dans `output/{periode}/`).
+## Calcul
+Aucune transformation — la série est déjà un indice composite construit et
+publié directement par la Fed de Chicago. Convention de lecture :
+- **NFCI = 0** : conditions financières dans la moyenne historique
+- **NFCI > 0** : conditions plus restrictives que la moyenne
+- **NFCI < 0** : conditions plus accommodantes que la moyenne
 
-## Calcul prévu
-_À détailler une fois le chart implémenté : formule exacte, source de
-chaque série, éventuelles transformations (YoY, z-score, percentile)._
+## Pourquoi ce graphique apporte un vrai plus
+Un seul taux directeur ne dit pas grand-chose sur les conditions
+financières réellement vécues par l'économie — accès au crédit, niveau de
+levier, volatilité des marchés, spreads de financement, etc. Le NFCI agrège
+des dizaines de variables de ce type en un seul indice, ce qui permet de
+juger si les conditions sont *réellement* restrictives dans l'économie
+réelle, au-delà du simple niveau des taux affiché par la Fed.
 
-## Pourquoi ce graphique apporte un plus
-_À détailler._
+## Lecture du graphique
+- Ligne bleue : NFCI
+- Ligne horizontale grise à 0 : moyenne historique, avec repères "Restrictif
+  ↑" / "Accommodant ↓"
+- Point + annotation : dernière valeur et son percentile sur la fenêtre
+  affichée
+- Bandes grisées : récessions US (NBER)
 
 ## Limitations connues
-_À détailler._
+- Le NFCI est publié en fréquence hebdomadaire, pas quotidienne ni
+  mensuelle — les mouvements très récents (dernières semaines) peuvent
+  encore être révisés légèrement par la Fed de Chicago.
+- L'indice est une moyenne pondérée de nombreuses variables sous-jacentes ;
+  ce chart ne décompose pas quelle composante (crédit, levier, risque...)
+  tire l'indice dans un sens ou dans l'autre à un instant donné.

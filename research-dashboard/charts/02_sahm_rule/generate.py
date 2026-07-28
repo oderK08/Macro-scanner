@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    COLOR_ACCENT
+    add_freshness_subtitle, highlight_last_point, COLOR_ACCENT
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
 
@@ -61,32 +61,31 @@ def generate():
                label=f"Seuil de déclenchement ({SAHM_THRESHOLD})")
     ax.axhline(0, color="#999999", linewidth=0.8)
 
-    format_date_axis(ax)
+    last_row = df.iloc[-1]
+    format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("Points de %", fontsize=9)
     ax.set_title("Sahm Rule Recession Indicator",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
+    add_freshness_subtitle(ax, last_row["date"])
     ax.legend(loc="upper left", fontsize=8.5, frameon=False)
 
-    last_row = df.iloc[-1]
     status = "SEUIL FRANCHI" if last_row["sahm_indicator"] >= SAHM_THRESHOLD else "sous le seuil"
-    ax.annotate(
-        f"Dernière valeur: {last_row['sahm_indicator']:.2f} ({status})",
-        xy=(last_row["date"], last_row["sahm_indicator"]),
-        xytext=(10, 10),
-        textcoords="offset points",
-        fontsize=8.5,
-        color=COLOR_ACCENT,
-        fontweight="bold",
+    highlight_last_point(
+        ax, last_row["date"], last_row["sahm_indicator"],
+        value_label=f"{last_row['sahm_indicator']:.2f} ({status})",
     )
 
-    add_source_footer(fig, "Source: FRED (UNRATE) | Calcul: MM3(chômage) - min12M(MM3)")
+    add_source_footer(
+        fig, "Source: FRED (UNRATE) | Calcul: MM3(chômage) - min12M(MM3)",
+        as_of_date=last_row["date"],
+    )
 
     period_label = get_current_period_label()
     out_dir = os.path.join(OUTPUT_DIR, period_label)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "02_sahm_rule.png")
 
-    fig.tight_layout(rect=[0, 0.03, 1, 1])
+    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 

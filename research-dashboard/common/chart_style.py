@@ -41,8 +41,13 @@ def setup_figure(figsize=(10, 6)):
     return fig, ax
 
 
-def add_recession_bands(ax, date_min=None, date_max=None):
-    """Ajoute les bandes grisées de récession NBER en fond de graphique."""
+def add_recession_bands(ax, date_min=None, date_max=None, label_first=True):
+    """
+    Ajoute les bandes grisées de récession NBER en fond de graphique.
+    Si label_first=True, ajoute un petit label discret sur la première bande
+    visible pour que le lecteur comprenne ce que représente le gris.
+    """
+    first_labeled = False
     for start, end in NBER_RECESSIONS:
         start_dt = pd.to_datetime(start)
         end_dt = pd.to_datetime(end)
@@ -52,16 +57,71 @@ def add_recession_bands(ax, date_min=None, date_max=None):
             continue
         ax.axvspan(start_dt, end_dt, color=COLOR_RECESSION, alpha=0.5, zorder=0)
 
+        if label_first and not first_labeled:
+            ylim = ax.get_ylim()
+            y_pos = ylim[1] - (ylim[1] - ylim[0]) * 0.04
+            ax.text(
+                start_dt, y_pos, " Récession", fontsize=7, color="#999999",
+                ha="left", va="top", style="italic",
+            )
+            first_labeled = True
 
-def add_source_footer(fig, source_text: str):
-    """Ajoute une mention de source en bas de la figure, petit texte gris."""
-    fig.text(0.01, 0.01, source_text, fontsize=7.5, color="#888888", ha="left")
+
+def add_source_footer(fig, source_text: str, as_of_date=None):
+    """
+    Ajoute une mention de source en bas de la figure, petit texte gris,
+    avec assez de marge pour ne jamais être coupée.
+    """
+    text = source_text
+    if as_of_date is not None:
+        date_str = pd.to_datetime(as_of_date).strftime("%d/%m/%Y")
+        text = f"{source_text} | Données au {date_str}"
+    fig.text(0.02, 0.015, text, fontsize=7.5, color="#888888", ha="left")
 
 
-def format_date_axis(ax):
-    """Formatte l'axe des dates : années seulement, une graduation par an."""
+def format_date_axis(ax, tight_to_last_point=None):
+    """
+    Formatte l'axe des dates : années seulement, une graduation par an.
+    Si tight_to_last_point est fourni (date de dernier point réel), resserre
+    l'axe X pour éviter le grand espace blanc à droite des charts.
+    """
     ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    if tight_to_last_point is not None:
+        current_min, _ = ax.get_xlim()
+        margin = pd.Timedelta(days=60)
+        new_max = mdates.date2num(pd.to_datetime(tight_to_last_point) + margin)
+        ax.set_xlim(current_min, new_max)
+
+
+def highlight_last_point(ax, x_last, y_last, value_label: str, color=None):
+    """
+    Marque visuellement le dernier point d'une série (point plein + valeur
+    affichée juste à côté), pour que l'œil trouve immédiatement où s'arrête
+    la courbe — pratique standard des charts de recherche.
+    """
+    if color is None:
+        color = COLOR_ACCENT
+    ax.plot(x_last, y_last, marker="o", markersize=5, color=color, zorder=5)
+    ax.annotate(
+        value_label,
+        xy=(x_last, y_last),
+        xytext=(8, 0),
+        textcoords="offset points",
+        fontsize=9,
+        color=color,
+        fontweight="bold",
+        va="center",
+    )
+
+
+def add_freshness_subtitle(ax, as_of_date):
+    """Ajoute une petite ligne 'Données au JJ/MM/AAAA' sous le titre."""
+    date_str = pd.to_datetime(as_of_date).strftime("%d/%m/%Y")
+    ax.text(
+        0.0, 1.06, f"Données au {date_str}",
+        transform=ax.transAxes, fontsize=8.5, color="#888888", ha="left",
+    )
 
 
 # --- Fonctions statistiques ---------------------------------------------------
@@ -77,15 +137,28 @@ def compute_percentile_rank(series: pd.Series) -> float:
     return float((series < last_value).mean() * 100)
 
 
-def annotate_last_point_percentile(ax, x_last, y_last, series: pd.Series, years_label: str = "10 ans"):
-    """Annote le dernier point du graphique avec son percentile historique."""
+def annotate_last_point_percentile(ax, x_last, y_last, series: pd.Series, years_label: str = "10 ans",
+                                     value_label: str = None):
+    """
+    Marque le dernier point (point plein) et affiche juste à côté la valeur
+    actuelle + son percentile historique, sur deux lignes, bien accroché au
+    point (pas flottant dans le vide comme avant).
+    """
     pct = compute_percentile_rank(series)
+    ax.plot(x_last, y_last, marker="o", markersize=5, color=COLOR_ACCENT, zorder=5)
+
+    lines = []
+    if value_label is not None:
+        lines.append(value_label)
+    lines.append(f"Percentile {years_label}: {pct:.0f}e")
+
     ax.annotate(
-        f"Percentile {years_label}: {pct:.0f}e",
+        "\n".join(lines),
         xy=(x_last, y_last),
-        xytext=(10, 10),
+        xytext=(10, 0),
         textcoords="offset points",
         fontsize=8.5,
         color=COLOR_ACCENT,
         fontweight="bold",
+        va="center",
     )

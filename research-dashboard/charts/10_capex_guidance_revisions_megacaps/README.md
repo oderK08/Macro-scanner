@@ -30,3 +30,26 @@ que sa propre tendance récente — corrélé avec (mais pas identique à) une
 révision à la hausse de la guidance.
 
 ## Calcul
+## Pourquoi ce graphique apporte un vrai plus malgré le changement de méthode
+Une vraie révision de consensus analystes nécessiterait une donnée payante
+(FactSet, Visible Alpha, Bloomberg) — hors scope d'un projet 100% gratuit.
+Ce proxy, basé uniquement sur du réalisé, capture quand même l'essentiel :
+est-ce que le rythme de dépense d'une méga-cap s'accélère ou ralentit par
+rapport à sa propre trajectoire récente ? C'est le type de signal que
+les commentaires de résultats trimestriels ("Microsoft a surpris le marché
+en accélérant son capex") cherchent à capturer.
+
+## Lecture du graphique
+- Une ligne par méga-cap, couleur distincte
+- Ligne horizontale à 0 : au-dessus = accélération du capex, en-dessous =
+  décélération
+- Axe Y : variation en % du capex annualisé (TTM) d'un trimestre à l'autre
+
+## Limitations connues
+- Proxy réalisé, pas une vraie révision de consensus — voir le changement
+  de méthode ci-dessus.
+- Le TTM lisse les à-coups mais introduit un décalage : une vraie
+  accélération très récente (1 seul trimestre) met plusieurs trimestres à
+  se refléter pleinement dans le TTM.
+- Même limitation de fusion multi-concepts XBRL que le chart 09 (voir son
+  README) : dépend de la présence des tickers dans les concepts suivis.

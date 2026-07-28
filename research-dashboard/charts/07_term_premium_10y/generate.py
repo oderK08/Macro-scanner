@@ -1,9 +1,9 @@
 """
-Graphique : Term Premium 10 ans (décomposition NY Fed ACM)
+Graphique : Term Premium 10 ans (modèle Kim-Wright, Fed Board)
 
 Séries FRED :
-  - ACMTP10 : term premium à 10 ans, modèle ACM de la NY Fed, quotidien
-  - DGS10   : taux nominal du Trésor US à 10 ans, quotidien
+  - THREEFYTP10 : term premium à 10 ans, modèle Kim-Wright (Fed Board), quotidien
+  - DGS10       : taux nominal du Trésor US à 10 ans, quotidien
 
 Calcul : aucune transformation — on affiche directement le term premium et
 le taux nominal, l'écart entre les deux représentant la composante
@@ -39,7 +39,7 @@ COLOR_NOMINAL = "#aaaaaa"
 
 def compute_term_premium(years: int = HISTORY_YEARS) -> pd.DataFrame:
     """Retourne un DataFrame avec colonnes: date, term_premium, nominal_10y."""
-    term_premium = get_series("ACMTP10", years=years)
+    term_premium = get_series("THREEFYTP10", years=years)
     nominal = get_series("DGS10", years=years)
 
     term_premium = term_premium.rename(columns={"value": "term_premium"}).sort_values("date")
@@ -59,13 +59,13 @@ def generate():
     ax.plot(df["date"], df["nominal_10y"], color=COLOR_NOMINAL, linewidth=1.3, linestyle="--",
             label="Taux nominal 10 ans (DGS10)")
     ax.plot(df["date"], df["term_premium"], color=COLOR_ACCENT, linewidth=2.0,
-            label="Term Premium 10 ans (ACM, NY Fed)")
+            label="Term Premium 10 ans (Kim-Wright, Fed Board)")
     ax.axhline(0, color="#999999", linewidth=0.8)
 
     last_row = df.iloc[-1]
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("%", fontsize=9)
-    ax.set_title("Term Premium 10 ans (décomposition NY Fed ACM)",
+    ax.set_title("Term Premium 10 ans (modèle Kim-Wright, Fed Board)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
     ax.legend(loc="upper left", fontsize=8.5, frameon=False)
@@ -77,7 +77,7 @@ def generate():
     )
 
     add_source_footer(
-        fig, "Source: FRED (ACMTP10, DGS10) | Modèle ACM, Federal Reserve Bank of New York",
+        fig, "Source: FRED (THREEFYTP10, DGS10) | Modèle Kim-Wright, Federal Reserve Board",
         as_of_date=last_row["date"],
     )
 

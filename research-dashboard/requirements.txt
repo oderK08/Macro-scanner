@@ -4,3 +4,5 @@ pandas>=2.0
 matplotlib>=3.8
 python-dateutil>=2.8
 lxml>=5.0
+reportlab>=4.0
+Pillow>=10.0

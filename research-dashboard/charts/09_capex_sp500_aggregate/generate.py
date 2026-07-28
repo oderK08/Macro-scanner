@@ -13,8 +13,7 @@ chart se concentre sur les 3 dernières années en détail trimestriel, avec :
      superposée, pour lisser le bruit trimestriel et voir la dynamique
      annuelle sous-jacente
 
-Concepts XBRL essayés (fusionnés, pas juste le premier qui répond -- voir
-_get_merged_frame_for_period) -- voir common/config.py :
+Concepts XBRL essayés dans l'ordre (fallback) -- voir common/config.py :
   - PaymentsToAcquirePropertyPlantAndEquipment
   - PaymentsForCapitalImprovements
   - PaymentsToAcquireProductiveAssets
@@ -34,11 +33,12 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from common.edgar_client import get_frame, get_ticker_to_cik_map
+from common.edgar_client import get_frame
+from common.sp500_list import get_sp500_constituents
 from common.chart_style import (
     setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle, COLOR_ACCENT
 )
-from common.config import get_current_period_label, OUTPUT_DIR, CAPEX_XBRL_CONCEPTS, SP500_LARGE_CAP_SAMPLE
+from common.config import get_current_period_label, OUTPUT_DIR, CAPEX_XBRL_CONCEPTS
 
 # Ce chart se concentre volontairement sur une fenêtre plus courte que les
 # autres (3 ans au lieu de 10) pour rester lisible en détail trimestriel
@@ -63,20 +63,30 @@ def _get_merged_frame_for_period(period: str) -> dict:
     fusionne les résultats par CIK (au lieu de s'arrêter au premier concept
     qui renvoie des données pour N'IMPORTE QUELLE entreprise).
 
-    Bug corrigé : l'ancienne version prenait le PREMIER concept renvoyant des
-    données globalement, puis abandonnait les autres concepts pour cette
+    Bug corrigé (1) : l'ancienne version prenait le PREMIER concept renvoyant
+    des données globalement, puis abandonnait les autres concepts pour cette
     période -- ce qui excluait silencieusement, sur TOUTE la fenêtre, toute
     entreprise taguant son capex avec un concept différent du premier trouvé
     (ex: si Amazon ou Apple utilisent un tag XBRL différent de
     PaymentsToAcquirePropertyPlantAndEquipment, ils disparaissaient
     entièrement du graphique sans aucun message d'erreur).
 
+    Bug corrigé (2) : une erreur réseau ponctuelle (timeout, erreur serveur
+    transitoire côté SEC) sur UN SEUL appel concept/trimestre faisait planter
+    tout le graphique. Chaque appel est maintenant protégé individuellement :
+    un échec est juste signalé et ignoré, sans interrompre le reste du calcul.
+
     Retourne un dict {cik: value}, en préférant la valeur du premier concept
     de la liste si une entreprise est présente dans plusieurs concepts.
     """
     combined = {}
     for concept in CAPEX_XBRL_CONCEPTS:
-        frame_df = get_frame(concept, period)
+        try:
+            frame_df = get_frame(concept, period)
+        except Exception as e:
+            print(f"  [avertissement] échec réseau pour {concept} / {period}: {e} -- ignoré, on continue")
+            continue
+
         if frame_df.empty:
             continue
         for _, row in frame_df.iterrows():
@@ -86,25 +96,29 @@ def _get_merged_frame_for_period(period: str) -> dict:
     return combined
 
 
-def compute_capex_by_company(years: int = DISPLAY_YEARS, tickers: list = None) -> pd.DataFrame:
+def compute_capex_by_company(years: int = DISPLAY_YEARS, constituents: pd.DataFrame = None) -> pd.DataFrame:
     """
     Retourne un DataFrame long: date, ticker, capex_billions.
     Récupère `years + 1` ans de données (l'année en plus sert uniquement à
     pouvoir calculer la tendance annuelle glissante -- TTM -- dès le premier
     trimestre affiché).
-    """
-    if tickers is None:
-        tickers = SP500_LARGE_CAP_SAMPLE
 
-    ticker_to_cik = get_ticker_to_cik_map()
+    `constituents` : DataFrame optionnel (colonnes ticker, cik) -- si non
+    fourni, va chercher la vraie composition actuelle du S&P 500 (~500
+    entreprises) via common.sp500_list, pas un échantillon.
+    """
+    if constituents is None:
+        constituents = get_sp500_constituents()
+
     cik_to_ticker = {}
     ciks = set()
-    for t in tickers:
-        cik = ticker_to_cik.get(t.upper())
-        if cik is not None:
-            cik_int = int(cik)
-            ciks.add(cik_int)
-            cik_to_ticker[cik_int] = t.upper()
+    for _, row in constituents.iterrows():
+        cik_int = int(row["cik"])
+        ciks.add(cik_int)
+        # En cas de double classe d'actions (ex: GOOGL/GOOG, même CIK), on
+        # garde le premier ticker rencontré pour l'affichage -- l'agrégat
+        # financier est de toute façon le même pour les deux classes.
+        cik_to_ticker.setdefault(cik_int, row["ticker"])
 
     current_year = datetime.today().year
     start_year = current_year - years - 1  # +1 an de marge pour le calcul TTM
@@ -160,7 +174,8 @@ def _build_pivot_and_ttm(df_long: pd.DataFrame, years: int, top_n: int):
 
 
 def generate():
-    df_long = compute_capex_by_company()
+    constituents = get_sp500_constituents()
+    df_long = compute_capex_by_company(constituents=constituents)
 
     if df_long.empty:
         raise RuntimeError(
@@ -240,8 +255,8 @@ def generate():
 
     add_source_footer(
         fig,
-        f"Source: SEC EDGAR (frames API) | Top {TOP_N} contributeurs sur un échantillon de "
-        f"{len(SP500_LARGE_CAP_SAMPLE)} grandes capitalisations, pas l'indice S&P 500 complet",
+        f"Source: SEC EDGAR (frames API) | Top {TOP_N} contributeurs sur les {len(constituents)} "
+        f"constituants du S&P 500 (Wikipedia, mis à jour à chaque run)",
         as_of_date=last_date,
     )
 

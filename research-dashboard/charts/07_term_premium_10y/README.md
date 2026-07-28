@@ -1,20 +1,34 @@
-# 07 — Term Premium 10Y (NY Fed ACM)
+# 07 — Term Premium 10 ans (décomposition NY Fed ACM)
 
-## Séries / sources
-FRED: ACMTP10 (NY Fed, term premium 10 ans), DGS10 (taux nominal 10 ans)
+## Séries FRED utilisées
+- `ACMTP10` : term premium à 10 ans, modèle ACM de la NY Fed, quotidien
+- `DGS10` : taux nominal du Trésor US à 10 ans, quotidien
 
-## Statut
-STUB — squelette à compléter. Voir `generate.py` dans ce dossier pour la
-structure attendue (mêmes conventions que les charts 01 et 02 déjà
-implémentés : cache incrémental, fenêtre glissante 10 ans, style partagé
-`common/chart_style.py`, sortie dans `output/{periode}/`).
+## Calcul
+Aucune transformation — les deux séries sont affichées directement.
 
-## Calcul prévu
-_À détailler une fois le chart implémenté : formule exacte, source de
-chaque série, éventuelles transformations (YoY, z-score, percentile)._
+## Pourquoi ce graphique apporte un vrai plus
+Le rendement à 10 ans se décompose en deux éléments : (1) la moyenne des
+taux courts anticipés sur les 10 prochaines années, et (2) une prime de
+risque (term premium) que les investisseurs exigent pour détenir une
+obligation longue plutôt que de rouler des obligations courtes. Une hausse
+du taux 10 ans tirée par la prime de risque (aversion au risque,
+incertitude budgétaire, offre de dette) ne raconte pas la même histoire
+économique qu'une hausse tirée par les anticipations de croissance ou
+d'inflation. C'est un chart classique des desks *rates* dans les notes de
+recherche des banques d'investissement.
 
-## Pourquoi ce graphique apporte un plus
-_À détailler._
+## Lecture du graphique
+- Ligne grise pointillée : taux nominal 10 ans (DGS10)
+- Ligne bleue pleine : term premium (ACMTP10)
+- Point + annotation : dernière valeur du term premium et son percentile
+  sur la fenêtre affichée
+- Bandes grisées : récessions US (NBER)
 
 ## Limitations connues
-_À détailler._
+- Le modèle ACM (Adrian-Crump-Moench) est une estimation économétrique, pas
+  une donnée observée directement — elle peut être révisée rétroactivement
+  par la NY Fed si le modèle est recalibré.
+- Le term premium peut être négatif (ce qui a été le cas une bonne partie
+  de la décennie 2010) : ce n'est pas une anomalie, juste une conséquence
+  du contexte de taux bas et d'assouplissement quantitatif.

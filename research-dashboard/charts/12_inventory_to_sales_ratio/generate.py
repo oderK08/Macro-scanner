@@ -31,33 +31,35 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from common.edgar_client import get_frame, get_ticker_to_cik_map
+from common.edgar_client import get_frame
+from common.sp500_list import get_sp500_constituents
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
     add_freshness_subtitle
 )
-from common.config import (
-    get_current_period_label, OUTPUT_DIR, REVENUE_XBRL_CONCEPTS,
-    INVENTORY_XBRL_CONCEPTS, SECTOR_TICKERS
-)
+from common.config import get_current_period_label, OUTPUT_DIR, REVENUE_XBRL_CONCEPTS, INVENTORY_XBRL_CONCEPTS
 
-SECTOR_COLORS = {
-    "Technologie": "#1a3a5c",
-    "Finance": "#c0392b",
-    "Santé": "#2f6690",
-    "Industrie": "#e08e79",
-    "Énergie": "#5b8ab8",
-    "Consommation": "#8fb8d8",
-    "Télécoms": "#9b59b6",
-    "Utilities": "#7f8c8d",
-}
-
-# Secteurs pertinents pour un ratio inventaires/ventes -- la Finance et les
-# Télécoms/Utilities n'ont pas vraiment de "stock" au sens classique, on les
-# exclut pour ne pas polluer le graphique avec des ratios non significatifs.
-INVENTORY_RELEVANT_SECTORS = ["Technologie", "Industrie", "Énergie", "Consommation", "Santé"]
+# Secteurs GICS pertinents pour un ratio inventaires/ventes -- la Finance,
+# les Télécoms/Utilities/Immobilier n'ont pas vraiment de "stock" au sens
+# classique (services, infrastructure), on les exclut pour ne pas polluer
+# le graphique avec des ratios non significatifs.
+INVENTORY_RELEVANT_SECTORS = [
+    "Information Technology", "Industrials", "Energy", "Consumer Discretionary",
+    "Consumer Staples", "Health Care", "Materials",
+]
 
 DISPLAY_YEARS = 5
+
+
+def _sector_color_map(sectors: list) -> dict:
+    """
+    Génère une couleur distincte par secteur à partir d'une palette
+    qualitative standard (tab20), indexée par ordre alphabétique -- robuste
+    si GICS ajoute/renomme un secteur un jour (voir chart 11 pour la même
+    logique).
+    """
+    palette = plt.get_cmap("tab20").colors
+    return {sector: palette[i % len(palette)] for i, sector in enumerate(sorted(sectors))}
 
 
 def _quarter_end_date(year: int, quarter: int) -> pd.Timestamp:
@@ -88,24 +90,24 @@ def _get_merged_frame_for_period(concepts: list, period: str) -> dict:
     return combined
 
 
-def compute_inventory_to_sales(years: int = DISPLAY_YEARS, sectors: dict = None) -> pd.DataFrame:
+def compute_inventory_to_sales(years: int = DISPLAY_YEARS, constituents: pd.DataFrame = None) -> pd.DataFrame:
     """
     Retourne un DataFrame long: date, secteur, inventory_to_sales_pct.
     Récupère years+1 an de données brutes en plus (marge pour le calcul du
     chiffre d'affaires en TTM).
-    """
-    if sectors is None:
-        sectors = {k: v for k, v in SECTOR_TICKERS.items() if k in INVENTORY_RELEVANT_SECTORS}
 
-    ticker_to_cik = get_ticker_to_cik_map()
+    `constituents` : DataFrame optionnel (colonnes ticker, sector, cik) --
+    si non fourni, va chercher la vraie composition actuelle du S&P 500 via
+    common.sp500_list, restreinte aux secteurs pertinents pour un ratio
+    inventaires/ventes (INVENTORY_RELEVANT_SECTORS).
+    """
+    if constituents is None:
+        constituents = get_sp500_constituents()
+
+    relevant = constituents[constituents["sector"].isin(INVENTORY_RELEVANT_SECTORS)]
     sector_ciks = {}
-    for sector, tickers in sectors.items():
-        ciks = set()
-        for t in tickers:
-            cik = ticker_to_cik.get(t.upper())
-            if cik is not None:
-                ciks.add(int(cik))
-        sector_ciks[sector] = ciks
+    for sector, group in relevant.groupby("sector"):
+        sector_ciks[sector] = set(int(cik) for cik in group["cik"])
 
     current_year = datetime.today().year
     start_year = current_year - years - 1
@@ -125,9 +127,25 @@ def compute_inventory_to_sales(years: int = DISPLAY_YEARS, sectors: dict = None)
             quarter_end = _quarter_end_date(year, quarter)
             for sector, ciks in sector_ciks.items():
                 sector_revenue = sum(v for cik, v in revenue_by_cik.items() if cik in ciks)
-                sector_inventory = sum(v for cik, v in inventory_by_cik.items() if cik in ciks)
+                sector_inventory_ciks = [cik for cik in ciks if cik in inventory_by_cik]
+                sector_inventory = sum(inventory_by_cik[cik] for cik in sector_inventory_ciks)
+
                 if sector_revenue == 0:
                     continue
+
+                # Garde-fou anti-effondrement artificiel : si moins de la
+                # moitié des entreprises du secteur ont publié leurs
+                # inventaires ce trimestre-là (ex: trimestre le plus récent
+                # pas encore totalement remonté dans EDGAR au moment du run),
+                # on ignore ce point plutôt que d'afficher un ratio faussé
+                # vers le bas -- sans ce garde-fou, TOUS les secteurs
+                # s'effondrent artificiellement vers 0 sur les derniers
+                # trimestres, simultanément, ce qui n'est pas un vrai
+                # phénomène économique.
+                min_coverage = max(1, len(ciks) // 2)
+                if len(sector_inventory_ciks) < min_coverage:
+                    continue
+
                 records.append({
                     "date": quarter_end,
                     "sector": sector,
@@ -157,7 +175,8 @@ def compute_inventory_to_sales(years: int = DISPLAY_YEARS, sectors: dict = None)
 
 
 def generate():
-    df = compute_inventory_to_sales()
+    constituents = get_sp500_constituents()
+    df = compute_inventory_to_sales(constituents=constituents)
 
     if df.empty:
         raise RuntimeError(
@@ -169,23 +188,25 @@ def generate():
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
     last_date = df["date"].max()
-    for sector in sorted(df["sector"].unique()):
+    sectors_present = sorted(df["sector"].unique())
+    sector_colors = _sector_color_map(sectors_present)
+
+    for sector in sectors_present:
         sub = df[df["sector"] == sector].sort_values("date")
-        color = SECTOR_COLORS.get(sector, "#888888")
-        ax.plot(sub["date"], sub["inventory_to_sales_pct"], color=color, linewidth=1.8,
+        ax.plot(sub["date"], sub["inventory_to_sales_pct"], color=sector_colors[sector], linewidth=1.8,
                 marker="o", markersize=3, label=sector)
 
     format_date_axis(ax, tight_to_last_point=last_date)
     ax.set_ylabel("Inventaires / CA annuel (%)", fontsize=9)
-    ax.set_title("Ratio inventaires/ventes par secteur",
+    ax.set_title("Ratio inventaires/ventes par secteur GICS",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=8, frameon=False, ncol=2)
+    ax.legend(loc="upper left", fontsize=7.5, frameon=False, ncol=2)
 
     add_source_footer(
         fig,
-        "Source: SEC EDGAR (frames API) | Ratio = inventaires fin de trimestre / chiffre d'affaires TTM, "
-        "échantillon de grandes capitalisations par secteur",
+        f"Source: SEC EDGAR (frames API) | Ratio = inventaires fin de trimestre / chiffre d'affaires TTM, "
+        f"{len(constituents)} constituants S&P 500 (Wikipedia), secteurs GICS officiels",
         as_of_date=last_date,
     )
 

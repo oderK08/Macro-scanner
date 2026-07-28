@@ -61,3 +61,35 @@ CAPEX_XBRL_CONCEPTS = [
     "PaymentsForCapitalImprovements",
     "PaymentsToAcquireProductiveAssets",
 ]
+
+# Échantillon statique de grandes capitalisations US pour le calcul du
+# capex agrégé (chart 09). Il n'existe PAS de liste "S&P 500" directement
+# interrogeable sur EDGAR -- on utilise donc une liste maintenue à la main.
+#
+# IMPORTANT : ceci est un échantillon représentatif de grandes capitalisations
+# réparties sur plusieurs secteurs (tech, finance, santé, industrie, énergie,
+# consommation, télécoms, utilities), PAS la liste exacte et à jour des 500
+# constituants du S&P 500. La composition du S&P 500 change plusieurs fois
+# par an (ajouts/retraits) ; cette liste n'est pas synchronisée
+# automatiquement avec ces changements. À réviser/étoffer manuellement de
+# temps en temps si tu veux affiner la couverture -- voir le README du chart
+# 09 pour le détail de cette limitation.
+SP500_LARGE_CAP_SAMPLE = [
+    # Technologie / communication
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "ORCL", "CSCO", "IBM",
+    "INTC", "ADBE", "CRM", "AVGO",
+    # Finance
+    "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "BLK",
+    # Santé
+    "JNJ", "PFE", "UNH", "MRK", "ABBV", "TMO", "ABT",
+    # Industrie
+    "BA", "CAT", "GE", "HON", "UPS", "LMT", "RTX", "MMM",
+    # Énergie
+    "XOM", "CVX", "COP", "SLB",
+    # Consommation
+    "WMT", "PG", "KO", "PEP", "MCD", "NKE", "HD", "COST", "DIS",
+    # Télécoms
+    "T", "VZ",
+    # Utilities
+    "NEE", "DUK",
+]

@@ -94,11 +94,16 @@ def format_date_axis(ax, tight_to_last_point=None):
         ax.set_xlim(current_min, new_max)
 
 
-def highlight_last_point(ax, x_last, y_last, value_label: str, color=None):
+def highlight_last_point(ax, x_last, y_last, value_label: str, color=None, offset=(8, 0)):
     """
     Marque visuellement le dernier point d'une série (point plein + valeur
     affichée juste à côté), pour que l'œil trouve immédiatement où s'arrête
     la courbe — pratique standard des charts de recherche.
+
+    offset=(dx, dy) : décalage en points de l'étiquette par rapport au point.
+    Augmente dy si l'étiquette chevauche une ligne ou la légende sur un
+    graphique donné (à ajuster à la main, cas par cas, directement dans le
+    generate.py concerné -- ne change rien pour les autres graphiques).
     """
     if color is None:
         color = COLOR_ACCENT
@@ -106,7 +111,7 @@ def highlight_last_point(ax, x_last, y_last, value_label: str, color=None):
     ax.annotate(
         value_label,
         xy=(x_last, y_last),
-        xytext=(8, 0),
+        xytext=offset,
         textcoords="offset points",
         fontsize=9,
         color=color,
@@ -138,11 +143,17 @@ def compute_percentile_rank(series: pd.Series) -> float:
 
 
 def annotate_last_point_percentile(ax, x_last, y_last, series: pd.Series, years_label: str = "10 ans",
-                                     value_label: str = None):
+                                     value_label: str = None, offset=(10, 0)):
     """
     Marque le dernier point (point plein) et affiche juste à côté la valeur
     actuelle + son percentile historique, sur deux lignes, bien accroché au
     point (pas flottant dans le vide comme avant).
+
+    offset=(dx, dy) : décalage en points de l'étiquette par rapport au point.
+    À ajuster à la main dans le generate.py concerné si l'étiquette chevauche
+    autre chose sur un graphique précis (ex: offset=(10, 25) pour la
+    remonter, offset=(-90, 15) pour la mettre à gauche du point plutôt qu'à
+    droite).
     """
     pct = compute_percentile_rank(series)
     ax.plot(x_last, y_last, marker="o", markersize=5, color=COLOR_ACCENT, zorder=5)
@@ -155,7 +166,7 @@ def annotate_last_point_percentile(ax, x_last, y_last, series: pd.Series, years_
     ax.annotate(
         "\n".join(lines),
         xy=(x_last, y_last),
-        xytext=(10, 0),
+        xytext=offset,
         textcoords="offset points",
         fontsize=8.5,
         color=COLOR_ACCENT,

@@ -123,24 +123,45 @@ def compute_capex_by_company(years: int = DISPLAY_YEARS, constituents: pd.DataFr
     current_year = datetime.today().year
     start_year = current_year - years - 1  # +1 an de marge pour le calcul TTM
 
-    records = []
+    # Premier passage : on collecte tout, en gardant trace du nombre
+    # d'entreprises effectivement trouvées par trimestre (sur nos ~500
+    # constituants), pour pouvoir repérer les trimestres pas encore
+    # complètement remontés dans EDGAR au moment du run.
+    raw_by_quarter = {}  # quarter_end -> {cik: value}
     for year in range(start_year, current_year + 1):
         for quarter in [1, 2, 3, 4]:
             period = f"CY{year}Q{quarter}"
-
             combined = _get_merged_frame_for_period(period)
             if not combined:
                 continue
+            matched = {cik: v for cik, v in combined.items() if cik in ciks}
+            if matched:
+                raw_by_quarter[_quarter_end_date(year, quarter)] = matched
 
-            quarter_end = _quarter_end_date(year, quarter)
-            for cik, value in combined.items():
-                if cik not in ciks:
-                    continue
-                records.append({
-                    "date": quarter_end,
-                    "ticker": cik_to_ticker.get(cik, f"CIK{cik}"),
-                    "capex_billions": value / 1e9,
-                })
+    if not raw_by_quarter:
+        return pd.DataFrame()
+
+    # Garde-fou anti-effondrement artificiel (même logique que chart 12) :
+    # un trimestre où beaucoup moins d'entreprises ont publié que la normale
+    # est presque toujours un trimestre pas encore complètement remonté dans
+    # EDGAR au moment du run (pas un vrai effondrement du capex). On l'exclut
+    # plutôt que d'afficher un total faussé vers le bas -- sans ce garde-fou,
+    # le dernier trimestre affiché peut apparaître comme un effondrement
+    # brutal du capex alors que ce n'est qu'un problème de fraîcheur des
+    # données.
+    max_coverage = max(len(v) for v in raw_by_quarter.values())
+    min_coverage = max(1, max_coverage // 2)
+
+    records = []
+    for quarter_end, matched in raw_by_quarter.items():
+        if len(matched) < min_coverage:
+            continue
+        for cik, value in matched.items():
+            records.append({
+                "date": quarter_end,
+                "ticker": cik_to_ticker.get(cik, f"CIK{cik}"),
+                "capex_billions": value / 1e9,
+            })
 
     return pd.DataFrame(records)
 

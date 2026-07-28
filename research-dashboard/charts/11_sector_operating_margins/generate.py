@@ -7,7 +7,8 @@ Concepts XBRL :
   - Revenus (fallback) : Revenues, RevenueFromContractWithCustomerExcludingAssessedTax, SalesRevenueNet
   - Résultat opérationnel : OperatingIncomeLoss
 
-Méthode : pour chaque secteur (common.config.SECTOR_TICKERS), pour chaque
+Méthode : pour chaque secteur GICS officiel (via common.sp500_list, qui va
+chercher la vraie composition du S&P 500 sur Wikipedia), pour chaque
 trimestre, on somme le résultat opérationnel et le chiffre d'affaires de
 toutes les entreprises du secteur trouvées dans les données EDGAR ce
 trimestre-là, on calcule chacun en TTM (glissant 12 mois, pour lisser la
@@ -31,30 +32,30 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from common.edgar_client import get_frame, get_ticker_to_cik_map
+from common.edgar_client import get_frame
+from common.sp500_list import get_sp500_constituents
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
     add_freshness_subtitle
 )
-from common.config import (
-    get_current_period_label, OUTPUT_DIR, HISTORY_YEARS,
-    REVENUE_XBRL_CONCEPTS, OPERATING_INCOME_XBRL_CONCEPTS, SECTOR_TICKERS
-)
+from common.config import get_current_period_label, OUTPUT_DIR, REVENUE_XBRL_CONCEPTS, OPERATING_INCOME_XBRL_CONCEPTS
 
-SECTOR_COLORS = {
-    "Technologie": "#1a3a5c",
-    "Finance": "#c0392b",
-    "Santé": "#2f6690",
-    "Industrie": "#e08e79",
-    "Énergie": "#5b8ab8",
-    "Consommation": "#8fb8d8",
-    "Télécoms": "#9b59b6",
-    "Utilities": "#7f8c8d",
-}
-
-# Fenêtre plus courte que HISTORY_YEARS : 6 secteurs en détail trimestriel
-# sur 10 ans deviendrait illisible : on se concentre sur les 5 dernières années.
+# Fenêtre plus courte que HISTORY_YEARS : 11 secteurs GICS en détail
+# trimestriel sur 10 ans deviendrait illisible : on se concentre sur les 5
+# dernières années.
 DISPLAY_YEARS = 5
+
+
+def _sector_color_map(sectors: list) -> dict:
+    """
+    Génère une couleur distincte par secteur à partir d'une palette
+    qualitative standard (tab20), indexée par ordre alphabétique des noms de
+    secteurs réellement présents dans les données. Robuste si GICS ajoute,
+    retire ou renomme un secteur un jour -- pas besoin de maintenir un
+    dictionnaire de couleurs à la main par nom de secteur.
+    """
+    palette = plt.get_cmap("tab20").colors
+    return {sector: palette[i % len(palette)] for i, sector in enumerate(sorted(sectors))}
 
 
 def _quarter_end_date(year: int, quarter: int) -> pd.Timestamp:
@@ -85,23 +86,21 @@ def _get_merged_frame_for_period(concepts: list, period: str) -> dict:
     return combined
 
 
-def compute_sector_margins(years: int = DISPLAY_YEARS, sectors: dict = None) -> pd.DataFrame:
+def compute_sector_margins(years: int = DISPLAY_YEARS, constituents: pd.DataFrame = None) -> pd.DataFrame:
     """
     Retourne un DataFrame long: date, secteur, operating_margin_pct.
     Récupère years+1 an de données brutes en plus (marge pour le calcul TTM).
-    """
-    if sectors is None:
-        sectors = SECTOR_TICKERS
 
-    ticker_to_cik = get_ticker_to_cik_map()
+    `constituents` : DataFrame optionnel (colonnes ticker, sector, cik) --
+    si non fourni, va chercher la vraie composition actuelle du S&P 500
+    (~500 entreprises, secteurs GICS officiels) via common.sp500_list.
+    """
+    if constituents is None:
+        constituents = get_sp500_constituents()
+
     sector_ciks = {}
-    for sector, tickers in sectors.items():
-        ciks = set()
-        for t in tickers:
-            cik = ticker_to_cik.get(t.upper())
-            if cik is not None:
-                ciks.add(int(cik))
-        sector_ciks[sector] = ciks
+    for sector, group in constituents.groupby("sector"):
+        sector_ciks[sector] = set(int(cik) for cik in group["cik"])
 
     current_year = datetime.today().year
     start_year = current_year - years - 1
@@ -153,7 +152,8 @@ def compute_sector_margins(years: int = DISPLAY_YEARS, sectors: dict = None) -> 
 
 
 def generate():
-    df = compute_sector_margins()
+    constituents = get_sp500_constituents()
+    df = compute_sector_margins(constituents=constituents)
 
     if df.empty:
         raise RuntimeError(
@@ -165,23 +165,25 @@ def generate():
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
     last_date = df["date"].max()
-    for sector in sorted(df["sector"].unique()):
+    sectors_present = sorted(df["sector"].unique())
+    sector_colors = _sector_color_map(sectors_present)
+
+    for sector in sectors_present:
         sub = df[df["sector"] == sector].sort_values("date")
-        color = SECTOR_COLORS.get(sector, "#888888")
-        ax.plot(sub["date"], sub["operating_margin_pct"], color=color, linewidth=1.8,
+        ax.plot(sub["date"], sub["operating_margin_pct"], color=sector_colors[sector], linewidth=1.8,
                 marker="o", markersize=3, label=sector)
 
     format_date_axis(ax, tight_to_last_point=last_date)
     ax.set_ylabel("Marge opérationnelle TTM (%)", fontsize=9)
-    ax.set_title("Marges opérationnelles par secteur (TTM)",
+    ax.set_title("Marges opérationnelles par secteur GICS (TTM)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=7.5, frameon=False, ncol=2)
+    ax.legend(loc="upper left", fontsize=7, frameon=False, ncol=2)
 
     add_source_footer(
         fig,
-        "Source: SEC EDGAR (frames API) | Marge = résultat opérationnel TTM / chiffre d'affaires TTM, "
-        "échantillon de grandes capitalisations par secteur",
+        f"Source: SEC EDGAR (frames API) | Marge = résultat opérationnel TTM / chiffre d'affaires TTM, "
+        f"{len(constituents)} constituants S&P 500 (Wikipedia), secteurs GICS officiels",
         as_of_date=last_date,
     )
 

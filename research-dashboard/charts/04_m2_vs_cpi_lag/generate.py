@@ -61,12 +61,17 @@ def compute_m2_vs_cpi_lag(years: int = HISTORY_YEARS, lag_months: int = LAG_MONT
 
     merged = pd.merge_asof(
         m2[["date", "m2_yoy"]].dropna(),
-        cpi[["date", "cpi_yoy_shifted"]].dropna(),
+        cpi[["date", "cpi_yoy_shifted"]],  # pas de dropna ici : les NaN de fin sont normaux (futur inconnu)
         on="date",
         direction="nearest",
         tolerance=pd.Timedelta(days=20),
     )
-    merged = merged.dropna(subset=["m2_yoy", "cpi_yoy_shifted"])
+    # On ne filtre QUE sur m2_yoy : la ligne M2 doit rester complète jusqu'à
+    # aujourd'hui. La ligne CPI décalée s'arrêtera naturellement plus tôt
+    # (NaN sur les derniers mois, car on ne peut pas décaler vers un futur
+    # qui n'existe pas encore) -- matplotlib affichera simplement un trou,
+    # pas un graphique tronqué dans son ensemble.
+    merged = merged.dropna(subset=["m2_yoy"])
 
     date_min = merged["date"].max() - pd.DateOffset(years=years)
     return merged[merged["date"] >= date_min].reset_index(drop=True)

@@ -1,22 +1,24 @@
 """
 Compile tous les graphiques générés (output/{periode}/*.png) en un seul
-rapport PDF, façon note de recherche : page de garde, sommaire, puis une
-page par graphique avec son titre et un court résumé tiré du README de
-chaque chart.
+rapport PDF, façon note de recherche : page de garde, sommaire, puis 2
+graphiques par page avec un commentaire analytique à côté de chacun.
+
+Priorité du texte affiché à côté de chaque graphique :
+  1. Le commentaire généré via l'API Anthropic (output/{periode}/commentary.json),
+     s'il existe pour ce graphique -- voir generate_commentary.py
+  2. À défaut, le résumé statique tiré du README du graphique
 
 Usage :
     python compile_report.py                # période courante (auto-détectée)
     python compile_report.py --period 2026S2 # période explicite
 
-Ce script est indépendant de run_all.py -- il se contente de lire les PNG
-déjà générés dans output/{periode}/ et les README.md dans charts/*/.
-Si un graphique n'a pas encore de PNG (stub pas encore implémenté, ou run
-partiel), il est simplement ignoré, avec un message, plutôt que de faire
-planter toute la compilation.
+Ce script est indépendant de run_all.py et generate_commentary.py -- il se
+contente de lire les PNG déjà générés et, s'il existe, le fichier
+commentary.json. Un graphique sans PNG est simplement ignoré.
 """
 import os
 import re
-import sys
+import json
 import argparse
 from datetime import datetime
 
@@ -34,13 +36,12 @@ from common.config import PROJECT_ROOT, OUTPUT_DIR, get_current_period_label
 
 CHARTS_DIR = os.path.join(PROJECT_ROOT, "charts")
 PAGE_SIZE = landscape(letter)
-MARGIN = 0.6 * inch
+MARGIN = 0.5 * inch
+CHARTS_PER_PAGE = 2
 
 
 def _discover_charts():
-    """
-    Retourne la liste triée des dossiers charts/NN_nom/, avec leur numéro.
-    """
+    """Retourne la liste triée des dossiers charts/NN_nom/."""
     entries = []
     for name in sorted(os.listdir(CHARTS_DIR)):
         path = os.path.join(CHARTS_DIR, name)
@@ -50,11 +51,7 @@ def _discover_charts():
 
 
 def _markdown_to_reportlab(text: str) -> str:
-    """
-    Convertit un minimum de syntaxe markdown (gras, code inline) en balises
-    que reportlab sait interpréter dans un Paragraph. Sans ça, "**mot**"
-    s'affiche avec les astérisques littéraux au lieu d'être mis en gras.
-    """
+    """Convertit un minimum de markdown (gras, code inline) en balises reportlab."""
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
     text = re.sub(r"`(.+?)`", r'<font face="Courier">\1</font>', text)
     return text
@@ -62,10 +59,8 @@ def _markdown_to_reportlab(text: str) -> str:
 
 def _extract_title_and_summary(readme_path: str):
     """
-    Extrait un titre (première ligne '# ...') et un court résumé (le
-    paragraphe sous une section dont le titre contient 'Pourquoi') depuis un
-    README.md de chart. Retourne (title, summary), avec des valeurs de repli
-    si le README est absent ou ne suit pas le format attendu.
+    Résumé de repli (utilisé si aucun commentaire API n'est disponible pour
+    ce graphique) : titre + paragraphe "Pourquoi" du README.
     """
     if not os.path.exists(readme_path):
         return "Graphique", ""
@@ -93,10 +88,8 @@ def _extract_title_and_summary(readme_path: str):
             summary_lines.append(line.strip())
 
     summary = " ".join(summary_lines).strip()
-    # Un résumé de README peut être long ; on le limite pour qu'il tienne
-    # confortablement sous le graphique sans déborder de la page.
-    if len(summary) > 500:
-        summary = summary[:497].rsplit(" ", 1)[0] + "..."
+    if len(summary) > 600:
+        summary = summary[:597].rsplit(" ", 1)[0] + "..."
 
     return title, _markdown_to_reportlab(summary)
 
@@ -123,6 +116,12 @@ def build_report(period_label: str = None, output_path: str = None):
             "Lance d'abord run_all.py pour générer les graphiques de cette période."
         )
 
+    commentary_path = os.path.join(charts_output_dir, "commentary.json")
+    commentaries = {}
+    if os.path.exists(commentary_path):
+        with open(commentary_path, "r", encoding="utf-8") as f:
+            commentaries = json.load(f)
+
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         "ReportTitle", parent=styles["Title"], fontSize=26, alignment=TA_CENTER, spaceAfter=6,
@@ -131,14 +130,14 @@ def build_report(period_label: str = None, output_path: str = None):
         "ReportSubtitle", parent=styles["Normal"], fontSize=13, alignment=TA_CENTER,
         textColor=colors.HexColor("#666666"), spaceAfter=4,
     )
+    section_title_style = ParagraphStyle(
+        "SectionTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=8,
+    )
     chart_title_style = ParagraphStyle(
-        "ChartTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=8,
+        "ChartTitle", parent=styles["Heading2"], fontSize=12, spaceAfter=4,
     )
     body_style = ParagraphStyle(
-        "Body", parent=styles["Normal"], fontSize=10, leading=14, alignment=TA_LEFT,
-    )
-    toc_entry_style = ParagraphStyle(
-        "TocEntry", parent=styles["Normal"], fontSize=11, leading=18,
+        "Body", parent=styles["Normal"], fontSize=9.5, leading=13, alignment=TA_LEFT,
     )
 
     doc = SimpleDocTemplate(
@@ -151,12 +150,10 @@ def build_report(period_label: str = None, output_path: str = None):
     story.append(Spacer(1, 1.8 * inch))
     story.append(Paragraph("Note de recherche macro & micro-économique", title_style))
     story.append(Paragraph(f"Période : {period_label}", subtitle_style))
-    story.append(Paragraph(f"Généré automatiquement le {datetime.today().strftime('%d/%m/%Y')}", subtitle_style))
+    story.append(Paragraph(f"Édition du {datetime.today().strftime('%d/%m/%Y')}", subtitle_style))
     story.append(Spacer(1, 0.4 * inch))
     story.append(Paragraph(
-        "Sources : Federal Reserve Economic Data (FRED) et SEC EDGAR. "
-        "Voir le README de chaque graphique dans le dépôt pour le détail des séries, "
-        "du calcul et des limitations.",
+        "Sources : Federal Reserve Economic Data (FRED) et SEC EDGAR.",
         ParagraphStyle("CoverNote", parent=styles["Normal"], fontSize=9, alignment=TA_CENTER,
                        textColor=colors.HexColor("#888888")),
     ))
@@ -165,7 +162,7 @@ def build_report(period_label: str = None, output_path: str = None):
     # --- Sommaire ---
     chart_dirs = _discover_charts()
     toc_rows = []
-    chart_pages = []  # (chart_dir, png_path, title, summary)
+    chart_pages = []  # (chart_dir, png_path, title, text)
 
     for chart_dir in chart_dirs:
         num_prefix = chart_dir[:2]
@@ -175,19 +172,21 @@ def build_report(period_label: str = None, output_path: str = None):
         ] if os.path.isdir(charts_output_dir) else []
 
         readme_path = os.path.join(CHARTS_DIR, chart_dir, "README.md")
-        title, summary = _extract_title_and_summary(readme_path)
+        title, fallback_summary = _extract_title_and_summary(readme_path)
 
         if png_candidates:
             png_path = os.path.join(charts_output_dir, png_candidates[0])
+            analysis_text = commentaries.get(chart_dir, "").strip()
+            text = analysis_text if analysis_text else fallback_summary
             toc_rows.append([num_prefix, title, "Inclus"])
-            chart_pages.append((chart_dir, png_path, title, summary))
+            chart_pages.append((chart_dir, png_path, title, text))
         else:
             toc_rows.append([num_prefix, title, "Non disponible ce trimestre"])
             print(f"[compile_report] {chart_dir}: pas de PNG trouvé pour cette période, ignoré dans le rapport.")
 
-    story.append(Paragraph("Sommaire", chart_title_style))
+    story.append(Paragraph("Sommaire", section_title_style))
     story.append(Spacer(1, 0.15 * inch))
-    table = Table(toc_rows, colWidths=[0.6 * inch, 5.5 * inch, 2.3 * inch])
+    table = Table(toc_rows, colWidths=[0.6 * inch, 6.5 * inch, 2.3 * inch])
     table.setStyle(TableStyle([
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#333333")),
@@ -198,24 +197,53 @@ def build_report(period_label: str = None, output_path: str = None):
     story.append(table)
     story.append(PageBreak())
 
-    # --- Une page par graphique disponible ---
+    # --- Deux graphiques par page, texte à côté de chacun ---
     page_width, page_height = PAGE_SIZE
-    available_width = page_width - 2 * MARGIN
-    available_height_for_image = page_height - 2 * MARGIN - 1.6 * inch  # place pour titre + résumé
+    usable_width = page_width - 2 * MARGIN
+    usable_height = page_height - 2 * MARGIN
 
-    for chart_dir, png_path, title, summary in chart_pages:
-        story.append(Paragraph(title, chart_title_style))
-        story.append(_fit_image(png_path, available_width, available_height_for_image))
-        if summary:
-            story.append(Spacer(1, 0.12 * inch))
-            story.append(Paragraph(summary, body_style))
+    unit_height = usable_height / CHARTS_PER_PAGE - 0.15 * inch
+    image_col_width = usable_width * 0.60
+    text_col_width = usable_width * 0.40
+    image_max_height = (unit_height - 0.35 * inch) * 0.92  # marge de sécurité (paddings, interlignage)
+
+    def _build_unit(chart_dir, png_path, title, text):
+        image_flowable = _fit_image(png_path, image_col_width - 0.1 * inch, image_max_height)
+        left_cell = [Paragraph(title, chart_title_style), image_flowable]
+        right_cell = [Paragraph(text, body_style)] if text else [Spacer(1, 1)]
+
+        unit_table = Table(
+            [[left_cell, right_cell]],
+            colWidths=[image_col_width, text_col_width],
+        )
+        unit_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ("LEFTPADDING", (0, 0), (0, 0), 0),
+            ("LEFTPADDING", (1, 0), (1, 0), 14),
+            ("RIGHTPADDING", (0, 0), (0, 0), 4),
+            ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ]))
+        return unit_table
+
+    for i in range(0, len(chart_pages), CHARTS_PER_PAGE):
+        batch = chart_pages[i:i + CHARTS_PER_PAGE]
+        for j, (chart_dir, png_path, title, text) in enumerate(batch):
+            story.append(_build_unit(chart_dir, png_path, title, text))
+            if j < len(batch) - 1:
+                story.append(Spacer(1, 0.15 * inch))
         story.append(PageBreak())
 
     if story and isinstance(story[-1], PageBreak):
-        story.pop()  # éviter une dernière page blanche à la fin
+        story.pop()  # éviter une dernière page blanche
 
     doc.build(story)
-    print(f"[compile_report] Rapport PDF généré: {output_path} ({len(chart_pages)} graphiques inclus)")
+    n_with_analysis = sum(1 for c in chart_pages if commentaries.get(c[0], "").strip())
+    print(
+        f"[compile_report] Rapport PDF généré: {output_path} "
+        f"({len(chart_pages)} graphiques, {n_with_analysis} avec commentaire analytique)"
+    )
     return output_path
 
 

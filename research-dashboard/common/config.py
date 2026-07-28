@@ -62,32 +62,12 @@ CAPEX_XBRL_CONCEPTS = [
     "PaymentsToAcquireProductiveAssets",
 ]
 
-# Échantillon statique de grandes capitalisations US, organisé par secteur.
-# Il n'existe PAS de liste "S&P 500" directement interrogeable sur EDGAR --
-# on utilise donc une liste maintenue à la main.
-#
-# IMPORTANT : ceci est un échantillon représentatif de grandes capitalisations
-# réparties sur plusieurs secteurs, PAS la liste exacte et à jour des 500
-# constituants du S&P 500. La composition du S&P 500 change plusieurs fois
-# par an (ajouts/retraits) ; cette liste n'est pas synchronisée
-# automatiquement avec ces changements. À réviser/étoffer manuellement de
-# temps en temps si tu veux affiner la couverture -- voir les README des
-# charts 09/11/12 pour le détail de cette limitation.
-SECTOR_TICKERS = {
-    "Technologie": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "ORCL", "CSCO", "IBM",
-                    "INTC", "ADBE", "CRM", "AVGO"],
-    "Finance": ["JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "BLK"],
-    "Santé": ["JNJ", "PFE", "UNH", "MRK", "ABBV", "TMO", "ABT"],
-    "Industrie": ["BA", "CAT", "GE", "HON", "UPS", "LMT", "RTX", "MMM"],
-    "Énergie": ["XOM", "CVX", "COP", "SLB"],
-    "Consommation": ["WMT", "PG", "KO", "PEP", "MCD", "NKE", "HD", "COST", "DIS"],
-    "Télécoms": ["T", "VZ"],
-    "Utilities": ["NEE", "DUK"],
-}
-
-# Liste plate dérivée de SECTOR_TICKERS -- utilisée par le chart 09 (capex
-# agrégé) qui n'a pas besoin de la distinction par secteur.
-SP500_LARGE_CAP_SAMPLE = [ticker for tickers in SECTOR_TICKERS.values() for ticker in tickers]
+# --- Composition du S&P 500 -------------------------------------------------
+# Depuis la bascule vers la vraie composition de l'indice (voir
+# common/sp500_list.py, qui va chercher la liste à jour sur Wikipedia à
+# chaque run), les charts 09/11/12 n'utilisent plus d'échantillon statique
+# ici. common/sp500_list.py gère aussi son propre repli en cache local en
+# cas d'échec réseau -- voir ce module pour le détail.
 
 # Concepts XBRL candidats pour le chiffre d'affaires (fallback, comme pour le
 # capex -- toutes les entreprises ne taguent pas leurs revenus pareil).

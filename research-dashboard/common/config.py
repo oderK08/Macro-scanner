@@ -85,3 +85,33 @@ OPERATING_INCOME_XBRL_CONCEPTS = ["OperatingIncomeLoss"]
 # concept "instant", pas "duration" -- voir chart 12 pour la nuance de format
 # de période EDGAR que ça implique).
 INVENTORY_XBRL_CONCEPTS = ["InventoryNet"]
+
+# --- Groupes pour les charts 13/14 (Debt-to-Assets, Interest Coverage) ------
+# Définition alignée sur la terminologie utilisée dans les notes de recherche
+# des banques (ex: Wells Fargo Securities) : les 4 "hyperscalers" sont les
+# géants du cloud qui construisent leur propre infrastructure IA.
+HYPERSCALER_TICKERS = ["MSFT", "GOOGL", "AMZN", "META"]
+
+# "Neoclouds" : fournisseurs de cloud spécialisés IA/GPU, apparus/montés en
+# puissance depuis 2023-2024. Catégorie encore récente et en évolution rapide
+# -- cette liste demande une révision manuelle plus fréquente que les autres
+# listes du projet (voir README du chart 13/14).
+#
+# Ces entreprises ne font PAS partie du S&P 500 (trop récentes/trop petites en
+# capitalisation) donc pas dans common/sp500_list.py -- leur CIK est résolu
+# via common.edgar_client.get_ticker_to_cik_map() (fichier officiel SEC).
+#
+# Point de vigilance : Nebius Group (NBIS) est une société néerlandaise cotée
+# au Nasdaq -- elle peut déposer des formulaires différents (20-F/6-K) des
+# dépositaires domestiques (10-K/10-Q), avec une couverture EDGAR possiblement
+# moins complète/régulière.
+NEOCLOUD_TICKERS = ["CRWV", "NBIS", "IREN", "APLD", "CORZ", "WULF", "CIFR"]
+
+# Concepts XBRL pour la dette portant intérêt (composants à ADDITIONNER, pas
+# des alternatives -- contrairement aux concepts capex/revenus où un seul
+# concept "gagne". La dette totale = portion courante + portion long terme,
+# généralement taguées séparément.
+DEBT_XBRL_CONCEPTS = ["DebtCurrent", "LongTermDebtNoncurrent"]
+
+# Concept XBRL standard pour les charges d'intérêt.
+INTEREST_EXPENSE_XBRL_CONCEPTS = ["InterestExpense"]

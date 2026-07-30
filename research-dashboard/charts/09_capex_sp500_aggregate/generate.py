@@ -291,7 +291,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "09_capex_sp500_aggregate.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.80, 0.95])
+    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 

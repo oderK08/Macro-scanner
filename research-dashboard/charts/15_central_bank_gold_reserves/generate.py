@@ -40,26 +40,28 @@ from common.config import get_current_period_label, OUTPUT_DIR
 
 PROVIDER = "IMF"
 DATASET = "IFS"
-DISPLAY_YEARS = 8
+DISPLAY_YEARS = 7
+TOP_N_BUYERS = 6
 
-# Pays suivis : mix des plus gros détenteurs mondiaux (États-Unis, Allemagne,
-# Italie, France -- ~60% des réserves d'or officielles mondiales à eux 4 avec
-# la Russie/Chine/Japon) et des acheteurs les plus actifs depuis 2022
-# (narratif de dé-dollarisation). Liste ajustable librement.
-COUNTRIES = ["United States", "Germany", "Italy", "France", "Russia", "China", "India", "Turkey"]
+# Pool de pays CANDIDATS pour le classement des "plus gros acheteurs sur 7
+# ans" -- pas une liste finale, juste les candidats plausibles parmi
+# lesquels on calcule qui a le plus acheté en tonnes. Liste ajustable
+# librement : plus il y a de candidats, plus le classement est robuste.
+BUYER_CANDIDATES = [
+    "China", "Russia", "India", "Turkey", "Poland", "Kazakhstan",
+    "Czech Republic", "Singapore", "Qatar", "Uzbekistan", "Egypt", "Iraq",
+]
+
+# Pays de référence : affichés comme un simple point/repère à droite du
+# graphique (avec leur valeur en texte), PAS comme une ligne complète --
+# leurs réserves sont énormes et quasi figées depuis des décennies, une
+# ligne plate écraserait l'échelle et rendrait les vrais acheteurs actifs
+# illisibles.
+REFERENCE_COUNTRIES = ["United States"]
 
 TONNES_PER_MILLION_TROY_OZ = 31.1034768  # 1 once troy = 31.1034768 grammes
 
-COUNTRY_COLORS = {
-    "United States": "#1a3a5c",
-    "Germany": "#2f6690",
-    "Italy": "#5b8ab8",
-    "France": "#8fb8d8",
-    "Russia": "#7f2020",
-    "China": "#c0392b",
-    "India": "#e08e79",
-    "Turkey": "#9b59b6",
-}
+BUYER_COLORS = ["#c0392b", "#1a3a5c", "#e08e79", "#2f6690", "#9b59b6", "#5b8ab8", "#8fb8d8", "#7f2020"]
 
 
 def _find_best_series(country: str):
@@ -86,9 +88,14 @@ def _find_best_series(country: str):
 
 
 def compute_gold_reserves_by_country(years: int = DISPLAY_YEARS, countries: list = None) -> pd.DataFrame:
-    """Retourne un DataFrame long: date, country, gold_tonnes."""
+    """
+    Retourne un DataFrame long: date, country, gold_tonnes.
+    Récupère TOUS les pays donnés (candidats acheteurs + références) --
+    le tri "qui a le plus acheté" se fait ensuite dans generate(), pas ici,
+    pour que cette fonction reste réutilisable indépendamment du classement.
+    """
     if countries is None:
-        countries = COUNTRIES
+        countries = BUYER_CANDIDATES + REFERENCE_COUNTRIES
 
     records = []
     for country in countries:
@@ -115,6 +122,25 @@ def compute_gold_reserves_by_country(years: int = DISPLAY_YEARS, countries: list
     return pd.DataFrame(records)
 
 
+def _rank_top_buyers(df: pd.DataFrame, candidates: list, top_n: int) -> list:
+    """
+    Classe les pays candidats par tonnes achetées sur la fenêtre affichée
+    (dernière valeur - première valeur), et retourne les top_n noms de pays.
+    Un pays qui a VENDU de l'or (variation négative) ne sera jamais mieux
+    classé qu'un pays qui en a acheté, quel que soit son niveau absolu.
+    """
+    changes = []
+    for country in candidates:
+        sub = df[df["country"] == country].sort_values("date")
+        if len(sub) < 2:
+            continue
+        change = sub["gold_tonnes"].iloc[-1] - sub["gold_tonnes"].iloc[0]
+        changes.append((country, change))
+
+    changes.sort(key=lambda x: x[1], reverse=True)
+    return [c for c, _ in changes[:top_n]]
+
+
 def generate():
     df = compute_gold_reserves_by_country()
 
@@ -126,26 +152,50 @@ def generate():
             "de ce fichier)."
         )
 
+    top_buyers = _rank_top_buyers(df, BUYER_CANDIDATES, TOP_N_BUYERS)
+    if not top_buyers:
+        raise RuntimeError(
+            "[15_central_bank_gold_reserves] Aucun pays candidat n'a pu être classé "
+            "(pas assez de données récupérées pour calculer une variation)."
+        )
+
     fig, ax = setup_figure()
     last_date = df["date"].max()
 
-    for country in COUNTRIES:
+    for i, country in enumerate(top_buyers):
         sub = df[df["country"] == country].sort_values("date")
         if sub.empty:
             continue
-        ax.plot(sub["date"], sub["gold_tonnes"], color=COUNTRY_COLORS.get(country, "#888888"),
+        color = BUYER_COLORS[i % len(BUYER_COLORS)]
+        ax.plot(sub["date"], sub["gold_tonnes"], color=color,
                 linewidth=1.8, marker="o", markersize=2.5, label=country)
 
     format_date_axis(ax, tight_to_last_point=last_date)
     ax.set_ylabel("Réserves d'or (tonnes)", fontsize=9)
-    ax.set_title("Réserves d'or des banques centrales, par pays",
+    ax.set_title(f"Top {TOP_N_BUYERS} des banques centrales ayant le plus acheté d'or sur {DISPLAY_YEARS} ans",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=8, frameon=False, ncol=2)
+    ax.legend(loc="upper left", fontsize=8.5, frameon=False)
+
+    # Pays de référence (États-Unis) : un simple repère textuel hors échelle,
+    # pas une ligne complète -- leurs réserves (~8 133 tonnes, quasi figées
+    # depuis les années 1970) écraseraient sinon toute l'échelle et
+    # rendraient les acheteurs actifs illisibles.
+    for ref_country in REFERENCE_COUNTRIES:
+        sub = df[df["country"] == ref_country].sort_values("date")
+        if sub.empty:
+            continue
+        last_value = sub["gold_tonnes"].iloc[-1]
+        ax.annotate(
+            f"Repère : {ref_country}\n≈ {last_value:,.0f} t (hors échelle)".replace(",", " "),
+            xy=(1.0, 0.97), xycoords="axes fraction",
+            ha="right", va="top", fontsize=8, color="#888888", style="italic",
+        )
 
     add_source_footer(
         fig,
-        "Source: DBnomics (IMF/IFS) | Volume converti d'onces troy en tonnes (1 once troy = 31.1035g)",
+        "Source: DBnomics (IMF/IFS) | Classement par variation des réserves sur la période affichée, "
+        "pas par niveau absolu | Volume converti d'onces troy en tonnes (1 once troy = 31.1035g)",
         as_of_date=last_date,
     )
 

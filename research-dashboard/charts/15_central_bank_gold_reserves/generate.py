@@ -42,20 +42,23 @@ PROVIDER = "IMF"
 DATASET = "IFS"
 DISPLAY_YEARS = 8
 
-# Pays suivis : parmi les plus gros acheteurs d'or connus depuis 2022
+# Pays suivis : mix des plus gros détenteurs mondiaux (États-Unis, Allemagne,
+# Italie, France -- ~60% des réserves d'or officielles mondiales à eux 4 avec
+# la Russie/Chine/Japon) et des acheteurs les plus actifs depuis 2022
 # (narratif de dé-dollarisation). Liste ajustable librement.
-COUNTRIES = ["China", "Russia", "India", "Turkey", "Poland", "Kazakhstan", "Czech Republic"]
+COUNTRIES = ["United States", "Germany", "Italy", "France", "Russia", "China", "India", "Turkey"]
 
 TONNES_PER_MILLION_TROY_OZ = 31.1034768  # 1 once troy = 31.1034768 grammes
 
 COUNTRY_COLORS = {
+    "United States": "#1a3a5c",
+    "Germany": "#2f6690",
+    "Italy": "#5b8ab8",
+    "France": "#8fb8d8",
+    "Russia": "#7f2020",
     "China": "#c0392b",
-    "Russia": "#1a3a5c",
     "India": "#e08e79",
-    "Turkey": "#2f6690",
-    "Poland": "#8fb8d8",
-    "Kazakhstan": "#5b8ab8",
-    "Czech Republic": "#9b59b6",
+    "Turkey": "#9b59b6",
 }
 
 

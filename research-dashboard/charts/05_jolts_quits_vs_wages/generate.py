@@ -106,7 +106,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "05_jolts_quits_vs_wages.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.82, 0.95])
+    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 

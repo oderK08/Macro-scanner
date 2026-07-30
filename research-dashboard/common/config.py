@@ -107,11 +107,13 @@ HYPERSCALER_TICKERS = ["MSFT", "GOOGL", "AMZN", "META"]
 # moins complète/régulière.
 NEOCLOUD_TICKERS = ["CRWV", "NBIS", "IREN", "APLD", "CORZ", "WULF", "CIFR"]
 
-# Concepts XBRL pour la dette portant intérêt (composants à ADDITIONNER, pas
-# des alternatives -- contrairement aux concepts capex/revenus où un seul
-# concept "gagne". La dette totale = portion courante + portion long terme,
-# généralement taguées séparément.
-DEBT_XBRL_CONCEPTS = ["DebtCurrent", "LongTermDebtNoncurrent"]
-
-# Concept XBRL standard pour les charges d'intérêt.
-INTEREST_EXPENSE_XBRL_CONCEPTS = ["InterestExpense"]
+# Concepts XBRL candidats pour les charges d'intérêt (fallback). Certaines
+# grandes entreprises très peu endettées (ex: hyperscalers avec énormément
+# de cash) peuvent cesser de taguer "InterestExpense" isolément une fois la
+# charge jugée non significative, et la fondre dans un poste plus large --
+# ces concepts alternatifs tentent de capturer ce cas de figure.
+INTEREST_EXPENSE_XBRL_CONCEPTS = [
+    "InterestExpense",
+    "InterestExpenseDebt",
+    "InterestAndDebtExpense",
+]

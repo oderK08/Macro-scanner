@@ -142,8 +142,17 @@ def compute_interest_coverage_by_group(years: int = DISPLAY_YEARS) -> pd.DataFra
     results = []
     for group in df_long["group"].unique():
         sub = df_long[df_long["group"] == group].sort_values("date").set_index("date")
-        ttm_opinc = sub["operating_income"].rolling(window=4).sum()
-        ttm_interest = sub["interest_expense"].rolling(window=4).sum()
+        # min_periods=3 (pas 4) : les petits groupes (Hyperscalers=4 entreprises,
+        # Neoclouds=7) sont beaucoup plus sensibles qu'un groupe de ~490
+        # entreprises (Reste du S&P 500) à UN SEUL trimestre où une des
+        # entreprises n'a pas fait remonter sa charge d'intérêt dans EDGAR à
+        # temps (décalage de calendrier fiscal, retard de dépôt...). Sans
+        # cette tolérance, un seul trimestre manquant casse ce trimestre ET
+        # les 3 suivants (la fenêtre glissante en a besoin), ce qui coupait
+        # prématurément la fin de la ligne pour les petits groupes alors que
+        # "Reste du S&P 500" continuait sans problème.
+        ttm_opinc = sub["operating_income"].rolling(window=4, min_periods=3).sum()
+        ttm_interest = sub["interest_expense"].rolling(window=4, min_periods=3).sum()
         ratio = ttm_opinc / ttm_interest
         for date, val in ratio.items():
             if pd.notna(val):
@@ -182,7 +191,7 @@ def generate():
     ax.set_title("Interest Coverage Ratio : Hyperscalers vs Neoclouds vs reste du marché",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=8, frameon=False)
+    ax.legend(loc="upper right", fontsize=8, frameon=False)
 
     add_source_footer(
         fig,

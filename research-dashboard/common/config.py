@@ -17,12 +17,16 @@ from dateutil.relativedelta import relativedelta
 # --- Clés / identifiants ---------------------------------------------------
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 EDGAR_USER_AGENT = os.environ.get("EDGAR_USER_AGENT", "")  # ex: "Jean Dupont jean.dupont@email.com"
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")  # optionnelle -- pour le commentaire analytique
 
 if not FRED_API_KEY:
     print("[config] ATTENTION: FRED_API_KEY n'est pas définie (variable d'environnement).")
 if not EDGAR_USER_AGENT:
     print("[config] ATTENTION: EDGAR_USER_AGENT n'est pas définie. "
           "La SEC exige un User-Agent identifiable (nom + email).")
+if not ANTHROPIC_API_KEY:
+    print("[config] INFO: ANTHROPIC_API_KEY n'est pas définie -- le commentaire analytique sera "
+          "ignoré, le rapport se limitera aux résumés statiques des README.")
 
 # --- Fenêtre temporelle glissante -------------------------------------------
 # Toujours calculée dynamiquement par rapport à aujourd'hui : jamais de date
@@ -106,6 +110,12 @@ HYPERSCALER_TICKERS = ["MSFT", "GOOGL", "AMZN", "META"]
 # dépositaires domestiques (10-K/10-Q), avec une couverture EDGAR possiblement
 # moins complète/régulière.
 NEOCLOUD_TICKERS = ["CRWV", "NBIS", "IREN", "APLD", "CORZ", "WULF", "CIFR"]
+
+# Concepts XBRL pour la dette portant intérêt (composants à ADDITIONNER, pas
+# des alternatives -- contrairement aux concepts capex/revenus où un seul
+# concept "gagne". La dette totale = portion courante + portion long terme,
+# généralement taguées séparément.
+DEBT_XBRL_CONCEPTS = ["DebtCurrent", "LongTermDebtNoncurrent"]
 
 # Concepts XBRL candidats pour les charges d'intérêt (fallback). Certaines
 # grandes entreprises très peu endettées (ex: hyperscalers avec énormément

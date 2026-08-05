@@ -14,7 +14,8 @@ research-dashboard/
 │   ├── cache_utils.py       # cache local incrémental (CSV)
 │   ├── fred_client.py       # wrapper FRED + cache
 │   ├── edgar_client.py      # wrapper SEC EDGAR + rate limiting + cache
-│   └── chart_style.py       # style matplotlib partagé, percentile/z-score
+│   ├── chart_style.py       # style matplotlib partagé, percentile/z-score
+│   └── themes.py            # regroupement thématique des graphiques (pilote l'ordre du rapport PDF)
 ├── charts/                  # un dossier par graphique
 │   ├── 01_real_fed_funds_rate/                ✅ implémenté — Politique monétaire
 │   ├── 02_sahm_rule/                           ✅ implémenté — Cycle & emploi
@@ -29,7 +30,16 @@ research-dashboard/
 │   ├── 11_sector_operating_margins/            ✅ implémenté — Corporate / secteurs
 │   ├── 12_inventory_to_sales_ratio/            ✅ implémenté — Corporate / secteurs
 │   ├── 13_debt_to_assets_by_group/             ✅ implémenté — Corporate / IA-capex
-│   └── 15_central_bank_gold_reserves/          ⚠️ implémenté, source DBnomics non éprouvée — Banques centrales
+│   ├── 15_central_bank_gold_reserves/          ⚠️ implémenté, source DBnomics non éprouvée — Banques centrales
+│   ├── 16_net_liquidity_fed/                   🆕 implémenté, 1er run réel à valider — Politique monétaire
+│   ├── 17_yield_curve_slope/                   🆕 implémenté, 1er run réel à valider — Politique monétaire
+│   ├── 18_real_yield_breakeven/                🆕 implémenté, 1er run réel à valider — Politique monétaire
+│   ├── 19_vix_vs_hy_spread/                    🆕 implémenté, 1er run réel à valider — Crédit & marchés
+│   ├── 20_dollar_index_vs_10y_yield/           🆕 implémenté, 1er run réel à valider — Devises & flux globaux
+│   ├── 21_mortgage_vs_housing_starts/          🆕 implémenté, 1er run réel à valider — Consommateur / ménages
+│   ├── 22_buybacks_vs_capex/                   🆕 implémenté, 1er run réel à valider — Corporate / secteurs
+│   ├── 23_net_debt_ebitda_by_sector/           🆕 implémenté, 1er run réel à valider — Corporate / secteurs
+│   └── 24_earnings_growth_vs_price_growth/     🆕 implémenté, 1er run réel à valider — Corporate / secteurs
 ├── data_cache/               # CSV bruts (cache incrémental, régénérable)
 ├── output/                  # PNG générés, un sous-dossier par période (2026S2, etc.)
 ├── run_all.py                # génère tous les graphiques d'un coup
@@ -94,6 +104,19 @@ Les PNG sortent dans `output/{période}/`, ex. `output/2026S2/01_real_fed_funds_
   (`common/edgar_client.py`) se cale à ~5/s par sécurité. User-Agent
   identifiable (nom + email) obligatoire sur chaque requête.
 
+## Organisation thématique du rapport
+
+Le rapport PDF (`compile_report.py`) regroupe les graphiques par grands
+thèmes (politique monétaire, cycle & emploi, crédit & marchés, corporate,
+etc.) : sommaire sectionné et bandeau de thème dans le corps du rapport.
+
+Le classement est piloté par **un seul fichier** : `common/themes.py`. Les
+noms de dossiers `charts/NN_*` n'encodent aucun thème — reclasser un
+graphique ne demande ni renommage de dossier, ni perte de cache. Un
+graphique absent de `themes.py` n'est pas perdu : il apparaît en fin de
+rapport dans la section « Autres / à classer » (volontairement visible,
+pour qu'un oubli de classement saute aux yeux).
+
 ## Ajouter un nouveau graphique
 
 1. Créer `charts/NN_nom_du_graphique/`
@@ -102,7 +125,9 @@ Les PNG sortent dans `output/{période}/`, ex. `output/2026S2/01_real_fed_funds_
    données, `common/chart_style.py` pour le rendu
 4. Documenter dans le `README.md` du dossier : séries, calcul, utilité,
    limitations
-5. `run_all.py` le détectera automatiquement au prochain run
+5. Le rattacher à un thème dans `common/themes.py` (sinon il sortira dans
+   « Autres / à classer » en fin de rapport)
+6. `run_all.py` le détectera automatiquement au prochain run
 
 ## Notes sur les révisions de données
 

@@ -117,6 +117,38 @@ NEOCLOUD_TICKERS = ["CRWV", "NBIS", "IREN", "APLD", "CORZ", "WULF", "CIFR"]
 # généralement taguées séparément.
 DEBT_XBRL_CONCEPTS = ["DebtCurrent", "LongTermDebtNoncurrent"]
 
+# Concepts XBRL candidats pour les rachats d'actions (fallback -- un seul
+# concept "gagne" par entreprise, comme capex/revenus). Le premier est le
+# concept standard, le second une variante utilisée par certaines
+# entreprises qui regroupent rachats et autres mouvements de capital.
+BUYBACK_XBRL_CONCEPTS = [
+    "PaymentsForRepurchaseOfCommonStock",
+    "PaymentsForRepurchaseOfEquity",
+]
+
+# Concepts XBRL candidats pour la trésorerie (poste de bilan, "instant").
+# Le premier est la définition stricte (cash + équivalents), le second
+# inclut le cash "restricted" -- utilisé par certaines entreprises à la
+# place du premier.
+CASH_XBRL_CONCEPTS = [
+    "CashAndCashEquivalentsAtCarryingValue",
+    "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+]
+
+# Concepts XBRL candidats pour dotations aux amortissements (flux, pour
+# reconstruire un proxy d'EBITDA = OperatingIncomeLoss + D&A). Les
+# entreprises taguent ce poste de façon très variable, d'où plusieurs
+# candidats -- même logique de fallback que capex/revenus.
+DEPRECIATION_AMORTIZATION_XBRL_CONCEPTS = [
+    "DepreciationDepletionAndAmortization",
+    "DepreciationAmortizationAndAccretionNet",
+    "DepreciationAndAmortization",
+]
+
+# Concept XBRL pour le résultat net (concept le plus universellement tagué
+# de tout US-GAAP -- toute entreprise publique doit le publier).
+NET_INCOME_XBRL_CONCEPTS = ["NetIncomeLoss"]
+
 # Concepts XBRL candidats pour les charges d'intérêt (fallback). Certaines
 # grandes entreprises très peu endettées (ex: hyperscalers avec énormément
 # de cash) peuvent cesser de taguer "InterestExpense" isolément une fois la

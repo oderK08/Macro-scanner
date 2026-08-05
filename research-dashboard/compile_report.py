@@ -33,6 +33,7 @@ from reportlab.lib import colors
 from PIL import Image as PILImage
 
 from common.config import PROJECT_ROOT, OUTPUT_DIR, get_current_period_label
+from common.themes import ordered_chart_dirs
 
 CHARTS_DIR = os.path.join(PROJECT_ROOT, "charts")
 PAGE_SIZE = landscape(letter)
@@ -159,12 +160,22 @@ def build_report(period_label: str = None, output_path: str = None):
     ))
     story.append(PageBreak())
 
-    # --- Sommaire ---
+    # --- Sommaire (groupé par thème) ---
+    # L'ordre d'affichage (thèmes, puis graphiques au sein de chaque thème)
+    # est piloté par common/themes.py -- les noms de dossiers charts/NN_*
+    # restent inchangés, seul l'ordre de présentation dans le rapport change.
     chart_dirs = _discover_charts()
-    toc_rows = []
-    chart_pages = []  # (chart_dir, png_path, title, text)
+    themed_charts = ordered_chart_dirs(chart_dirs)
 
-    for chart_dir in chart_dirs:
+    toc_rows = []       # lignes du sommaire ; None en col 0 = ligne de thème
+    chart_pages = []    # (theme, chart_dir, png_path, title, text)
+
+    current_theme = None
+    for theme, chart_dir in themed_charts:
+        if theme != current_theme:
+            toc_rows.append([None, theme, ""])
+            current_theme = theme
+
         num_prefix = chart_dir[:2]
         png_candidates = [
             f for f in os.listdir(charts_output_dir)
@@ -179,21 +190,33 @@ def build_report(period_label: str = None, output_path: str = None):
             analysis_text = commentaries.get(chart_dir, "").strip()
             text = analysis_text if analysis_text else fallback_summary
             toc_rows.append([num_prefix, title, "Inclus"])
-            chart_pages.append((chart_dir, png_path, title, text))
+            chart_pages.append((theme, chart_dir, png_path, title, text))
         else:
-            toc_rows.append([num_prefix, title, "Non disponible ce trimestre"])
+            toc_rows.append([num_prefix, title, "Non disponible cette période"])
             print(f"[compile_report] {chart_dir}: pas de PNG trouvé pour cette période, ignoré dans le rapport.")
 
     story.append(Paragraph("Sommaire", section_title_style))
     story.append(Spacer(1, 0.15 * inch))
-    table = Table(toc_rows, colWidths=[0.6 * inch, 6.5 * inch, 2.3 * inch])
-    table.setStyle(TableStyle([
+    table_data = [
+        ["" if row[0] is None else row[0], row[1], row[2]] for row in toc_rows
+    ]
+    table = Table(table_data, colWidths=[0.6 * inch, 6.5 * inch, 2.3 * inch])
+    table_style = [
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#333333")),
         ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
+    ]
+    for i, row in enumerate(toc_rows):
+        if row[0] is None:  # ligne de thème : gras, fond gris clair
+            table_style += [
+                ("FONTNAME", (0, i), (-1, i), "Helvetica-Bold"),
+                ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#f0f2f5")),
+                ("TEXTCOLOR", (0, i), (-1, i), colors.HexColor("#1a3a5c")),
+                ("TOPPADDING", (0, i), (-1, i), 8),
+            ]
+    table.setStyle(TableStyle(table_style))
     story.append(table)
     story.append(PageBreak())
 
@@ -207,8 +230,10 @@ def build_report(period_label: str = None, output_path: str = None):
     text_col_width = usable_width * 0.40
     image_max_height = (unit_height - 0.35 * inch) * 0.92  # marge de sécurité (paddings, interlignage)
 
-    def _build_unit(chart_dir, png_path, title, text):
-        image_flowable = _fit_image(png_path, image_col_width - 0.1 * inch, image_max_height)
+    def _build_unit(chart_dir, png_path, title, text, max_image_height=None):
+        if max_image_height is None:
+            max_image_height = image_max_height
+        image_flowable = _fit_image(png_path, image_col_width - 0.1 * inch, max_image_height)
         left_cell = [Paragraph(title, chart_title_style), image_flowable]
         right_cell = [Paragraph(text, body_style)] if text else [Spacer(1, 1)]
 
@@ -227,19 +252,47 @@ def build_report(period_label: str = None, output_path: str = None):
         ]))
         return unit_table
 
-    for i in range(0, len(chart_pages), CHARTS_PER_PAGE):
-        batch = chart_pages[i:i + CHARTS_PER_PAGE]
-        for j, (chart_dir, png_path, title, text) in enumerate(batch):
-            story.append(_build_unit(chart_dir, png_path, title, text))
-            if j < len(batch) - 1:
-                story.append(Spacer(1, 0.15 * inch))
-        story.append(PageBreak())
+    # Regroupement par thème : chaque thème démarre sur une nouvelle page
+    # avec un bandeau de section, puis 2 graphiques par page au sein du thème.
+    theme_banner_style = ParagraphStyle(
+        "ThemeBanner", parent=styles["Heading1"], fontSize=15,
+        textColor=colors.HexColor("#1a3a5c"), spaceAfter=10,
+    )
+
+    # Hauteur consommée par le bandeau de thème (police 15 + interlignage +
+    # espacements du style Heading1) : à retrancher de la hauteur d'image des
+    # graphiques partageant la première page d'un thème, sinon le 2e graphique
+    # déborde sur une page supplémentaire.
+    banner_height = 0.55 * inch
+
+    themes_in_order = []
+    for entry in chart_pages:
+        if entry[0] not in themes_in_order:
+            themes_in_order.append(entry[0])
+
+    for theme in themes_in_order:
+        theme_entries = [e for e in chart_pages if e[0] == theme]
+        for i in range(0, len(theme_entries), CHARTS_PER_PAGE):
+            batch = theme_entries[i:i + CHARTS_PER_PAGE]
+            is_banner_page = (i == 0)
+            if is_banner_page:
+                story.append(Paragraph(theme, theme_banner_style))
+            unit_image_height = (
+                image_max_height - banner_height / CHARTS_PER_PAGE
+                if is_banner_page else image_max_height
+            )
+            for j, (_theme, chart_dir, png_path, title, text) in enumerate(batch):
+                story.append(_build_unit(chart_dir, png_path, title, text,
+                                         max_image_height=unit_image_height))
+                if j < len(batch) - 1:
+                    story.append(Spacer(1, 0.15 * inch))
+            story.append(PageBreak())
 
     if story and isinstance(story[-1], PageBreak):
         story.pop()  # éviter une dernière page blanche
 
     doc.build(story)
-    n_with_analysis = sum(1 for c in chart_pages if commentaries.get(c[0], "").strip())
+    n_with_analysis = sum(1 for c in chart_pages if commentaries.get(c[1], "").strip())
     print(
         f"[compile_report] Rapport PDF généré: {output_path} "
         f"({len(chart_pages)} graphiques, {n_with_analysis} avec commentaire analytique)"

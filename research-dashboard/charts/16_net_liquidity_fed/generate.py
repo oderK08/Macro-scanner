@@ -5,14 +5,19 @@ Séries FRED :
   - WALCL     : total du bilan de la Fed, hebdomadaire, en MILLIONS de $
   - RRPONTSYD : encours du Reverse Repo overnight (ON RRP), quotidien, en MILLIARDS de $
   - WTREGEN   : Treasury General Account (compte du Trésor à la Fed),
-                hebdomadaire, en MILLIARDS de $
+                hebdomadaire, en MILLIONS de $
 
 Calcul :
-    liquidité_nette ($ trillions) = WALCL/1e6 - RRPONTSYD/1e3 - WTREGEN/1e3
+    liquidité_nette ($ trillions) = WALCL/1e6 - RRPONTSYD/1e3 - WTREGEN/1e6
 
-ATTENTION aux unités : les trois séries FRED ne sont PAS dans la même unité
-(WALCL en millions, les deux autres en milliards). Tout est converti en
-trillions avant soustraction -- c'est l'erreur classique sur ce calcul.
+ATTENTION aux unités : les trois séries FRED ne sont PAS dans la même unité,
+et pas de façon intuitive -- WALCL et WTREGEN sont en millions, RRPONTSYD en
+milliards. C'est l'erreur classique sur ce calcul, et ce projet l'a faite :
+la première version supposait WTREGEN en milliards, ce qui surestimait le
+TGA d'un facteur 1000 et produisait une "liquidité nette" à -900 trillions.
+D'où le garde-fou de vraisemblance dans generate() : si le calcul sort de
+tout ordre de grandeur plausible, le chart échoue explicitement au lieu de
+publier un graphique absurde dans le rapport.
 
 Pourquoi c'est utile : le bilan brut de la Fed ne dit pas combien de
 liquidité atteint réellement les marchés. Ce qui est parqué au Reverse Repo
@@ -55,7 +60,7 @@ def compute_net_liquidity(years: int = HISTORY_YEARS) -> pd.DataFrame:
     """
     walcl = get_series("WALCL", years=years)          # millions $
     rrp = get_series("RRPONTSYD", years=years)        # milliards $
-    tga = get_series("WTREGEN", years=years)          # milliards $
+    tga = get_series("WTREGEN", years=years)          # millions $
     sp500 = get_series("SP500", years=years)
 
     walcl = walcl.rename(columns={"value": "walcl"}).sort_values("date")
@@ -70,9 +75,10 @@ def compute_net_liquidity(years: int = HISTORY_YEARS) -> pd.DataFrame:
     merged = merged.dropna(subset=["walcl", "rrp", "tga"])
 
     # Conversion en trillions AVANT soustraction (unités FRED hétérogènes,
-    # voir docstring du module).
+    # voir docstring du module : WALCL et WTREGEN en millions, RRPONTSYD en
+    # milliards).
     merged["net_liquidity_tn"] = (
-        merged["walcl"] / 1e6 - merged["rrp"] / 1e3 - merged["tga"] / 1e3
+        merged["walcl"] / 1e6 - merged["rrp"] / 1e3 - merged["tga"] / 1e6
     )
     return merged[["date", "net_liquidity_tn", "sp500"]].reset_index(drop=True)
 
@@ -84,6 +90,22 @@ def generate():
         raise RuntimeError(
             "[16_net_liquidity_fed] Aucune donnée récupérée depuis FRED "
             "(WALCL/RRPONTSYD/WTREGEN). Vérifie FRED_API_KEY et la connectivité réseau."
+        )
+
+    # Garde-fou de vraisemblance : la liquidité nette US se compte en
+    # trillions à un chiffre (bilan Fed ~4-9T sur la décennie, moins RRP et
+    # TGA qui se comptent en centaines de milliards). Une valeur hors de
+    # [0, 20] T$ signifie presque sûrement qu'une série FRED a changé
+    # d'unité (l'erreur qui a produit la première version de ce chart, à
+    # -900 T$) -- mieux vaut échouer explicitement que publier un graphique
+    # absurde dans le rapport.
+    last_value = df["net_liquidity_tn"].iloc[-1]
+    if not (0 < last_value < 20):
+        raise RuntimeError(
+            f"[16_net_liquidity_fed] Liquidité nette calculée invraisemblable "
+            f"({last_value:.1f} T$, attendu entre 0 et 20 T$). Une série FRED a "
+            "probablement changé d'unité -- vérifier les unités de WALCL (millions), "
+            "RRPONTSYD (milliards) et WTREGEN (millions) sur fred.stlouisfed.org."
         )
 
     fig, ax = setup_figure()

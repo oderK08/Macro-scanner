@@ -11,6 +11,13 @@ import matplotlib.transforms as transforms
 import pandas as pd
 import numpy as np
 
+# Le projet n'utilise jamais la notation mathématique de matplotlib, mais
+# ses labels contiennent souvent des montants avec "$" (ex: "5.70 T$") --
+# sans ceci, une PAIRE de "$" dans un même texte (ex: un label de légende
+# "($T, éch. gauche) : 5.70 T$") bascule silencieusement le texte entre les
+# deux en italique mathématique. Désactivé globalement, une fois pour toutes.
+plt.rcParams["text.parse_math"] = False
+
 # --- Palette sémantique -------------------------------------------------------
 # UNE seule convention de couleurs pour tout le projet, par RÔLE de série --
 # jamais de couleur ad hoc dans un generate.py. Le lecteur du rapport apprend

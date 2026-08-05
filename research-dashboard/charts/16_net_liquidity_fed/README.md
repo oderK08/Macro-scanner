@@ -3,16 +3,21 @@
 ## Séries FRED utilisées
 - `WALCL` : total du bilan de la Fed, hebdomadaire, **en millions de $**
 - `RRPONTSYD` : encours du Reverse Repo overnight (ON RRP), quotidien, **en milliards de $**
-- `WTREGEN` : Treasury General Account (compte du Trésor à la Fed), hebdomadaire, **en milliards de $**
+- `WTREGEN` : Treasury General Account (compte du Trésor à la Fed), hebdomadaire, **en millions de $**
 - `SP500` : niveau de l'indice S&P 500, quotidien (superposition, échelle droite)
 
 ## Calcul
 ```
-liquidité_nette ($T) = WALCL/1e6 - RRPONTSYD/1e3 - WTREGEN/1e3
+liquidité_nette ($T) = WALCL/1e6 - RRPONTSYD/1e3 - WTREGEN/1e6
 ```
-⚠️ Les trois séries ne sont **pas dans la même unité** (WALCL en millions,
-les deux autres en milliards) — tout est converti en trillions avant
-soustraction. C'est l'erreur classique sur ce calcul.
+⚠️ Les trois séries ne sont **pas dans la même unité**, et pas de façon
+intuitive : WALCL et WTREGEN en millions, RRPONTSYD en milliards. C'est
+l'erreur classique sur ce calcul — la première version de ce chart l'a
+faite (WTREGEN supposé en milliards → TGA surestimé ×1000 → « liquidité
+nette » à -900 trillions). Un garde-fou de vraisemblance dans
+`generate()` fait désormais échouer le chart explicitement si le résultat
+sort de l'intervalle plausible [0, 20] T$, plutôt que de publier un
+graphique absurde dans le rapport.
 
 Alignement temporel par `merge_asof` (tolérance 7 jours) sur la base de
 WALCL, qui est hebdomadaire (publié le mercredi).

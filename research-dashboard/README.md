@@ -16,18 +16,20 @@ research-dashboard/
 │   ├── edgar_client.py      # wrapper SEC EDGAR + rate limiting + cache
 │   └── chart_style.py       # style matplotlib partagé, percentile/z-score
 ├── charts/                  # un dossier par graphique
-│   ├── 01_real_fed_funds_rate/    ✅ implémenté
-│   ├── 02_sahm_rule/               ✅ implémenté
-│   ├── 03_hy_credit_spread_vs_sp500/       🔲 stub
-│   ├── 04_m2_vs_cpi_lag/                    🔲 stub
-│   ├── 05_jolts_quits_vs_wages/             🔲 stub
-│   ├── 06_nfci_financial_conditions/        🔲 stub
-│   ├── 07_term_premium_10y/                 🔲 stub
-│   ├── 08_debt_service_vs_savings/          🔲 stub
-│   ├── 09_capex_sp500_aggregate/            🔲 stub
-│   ├── 10_capex_guidance_revisions_megacaps/🔲 stub
-│   ├── 11_sector_operating_margins/         🔲 stub
-│   └── 12_inventory_to_sales_ratio/         🔲 stub
+│   ├── 01_real_fed_funds_rate/                ✅ implémenté — Politique monétaire
+│   ├── 02_sahm_rule/                           ✅ implémenté — Cycle & emploi
+│   ├── 03_hy_credit_spread_vs_sp500/           ✅ implémenté — Crédit & marchés
+│   ├── 04_m2_vs_cpi_lag/                       ✅ implémenté — Inflation & monnaie
+│   ├── 05_jolts_quits_vs_wages/                ✅ implémenté — Cycle & emploi
+│   ├── 06_nfci_financial_conditions/           ✅ implémenté — Politique monétaire
+│   ├── 07_term_premium_10y/                    ✅ implémenté — Politique monétaire
+│   ├── 08_debt_service_vs_savings/             ✅ implémenté — Consommateur / ménages
+│   ├── 09_capex_sp500_aggregate/               ✅ implémenté — Corporate / secteurs
+│   ├── 10_capex_guidance_revisions_megacaps/   ✅ implémenté — Corporate / IA-capex
+│   ├── 11_sector_operating_margins/            ✅ implémenté — Corporate / secteurs
+│   ├── 12_inventory_to_sales_ratio/            ✅ implémenté — Corporate / secteurs
+│   ├── 13_debt_to_assets_by_group/             ✅ implémenté — Corporate / IA-capex
+│   └── 15_central_bank_gold_reserves/          ⚠️ implémenté, source DBnomics non éprouvée — Banques centrales
 ├── data_cache/               # CSV bruts (cache incrémental, régénérable)
 ├── output/                  # PNG générés, un sous-dossier par période (2026S2, etc.)
 ├── run_all.py                # génère tous les graphiques d'un coup

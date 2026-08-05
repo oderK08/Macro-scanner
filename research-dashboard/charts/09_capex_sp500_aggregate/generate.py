@@ -36,7 +36,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.edgar_client import get_frame
 from common.sp500_list import get_sp500_constituents
 from common.chart_style import (
-    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle, COLOR_ACCENT
+    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle,
+    finalize_chart, COLOR_ACCENT
 )
 from common.config import get_current_period_label, OUTPUT_DIR, CAPEX_XBRL_CONCEPTS
 
@@ -236,9 +237,15 @@ def generate():
         bars_for_legend.append(bar)
         bottom = bottom + pivot[col]
 
-    # Tendance annuelle (TTM) superposée sur l'axe secondaire
+    # Tendance annuelle (TTM) superposée sur l'axe secondaire. La dernière
+    # valeur TTM est portée par le label de légende (pas de texte dans la
+    # zone de tracé -- règle du projet, voir chart_style.finalize_chart).
+    ttm_clean = ttm.dropna()
+    ttm_label = "Tendance annuelle (TTM, éch. droite)"
+    if not ttm_clean.empty:
+        ttm_label += f" : {ttm_clean.iloc[-1]:.0f} Md$"
     line_ttm, = ax2.plot(ttm.index, ttm.values, color=COLOR_TTM_LINE, linewidth=2.0,
-                          marker="o", markersize=4, label="Tendance annuelle (TTM, éch. droite)", zorder=5)
+                          marker="o", markersize=4, label=ttm_label, zorder=5)
 
     last_date = pivot.index.max()
     format_date_axis(ax, tight_to_last_point=last_date)
@@ -251,33 +258,7 @@ def generate():
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
 
-    handles = [b[0] for b in bars_for_legend] + [line_ttm]
-    labels = plot_columns + [line_ttm.get_label()]
-    ax.legend(handles, labels, loc="upper left", fontsize=7.5, frameon=False, ncol=2)
-
     last_total = pivot.loc[last_date, plot_columns].sum()
-    ax.annotate(
-        f"${last_total:.0f}Md ce trimestre",
-        xy=(last_date, last_total),
-        xytext=(55, 15),
-        textcoords="offset points",
-        fontsize=8.5,
-        color=COLOR_ACCENT,
-        fontweight="bold",
-    )
-
-    if not ttm.dropna().empty:
-        last_ttm_date = ttm.dropna().index[-1]
-        last_ttm_value = ttm.dropna().iloc[-1]
-        ax2.annotate(
-            f"${last_ttm_value:.0f}Md sur 12 mois glissants",
-            xy=(last_ttm_date, last_ttm_value),
-            xytext=(55, -15),
-            textcoords="offset points",
-            fontsize=8.5,
-            color=COLOR_TTM_LINE,
-            fontweight="bold",
-        )
 
     add_source_footer(
         fig,
@@ -291,9 +272,10 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "09_capex_sp500_aggregate.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    handles = [b[0] for b in bars_for_legend] + [line_ttm]
+    labels = plot_columns + [line_ttm.get_label()]
+    finalize_chart(fig, ax, out_path, handles=handles, labels=labels, legend_ncol=4,
+                   note=f"Dernier trimestre : {last_total:.0f} Md$ de capex agrégé")
 
     print(f"[09_capex_sp500_aggregate] Graphique sauvegardé: {out_path}")
     return out_path

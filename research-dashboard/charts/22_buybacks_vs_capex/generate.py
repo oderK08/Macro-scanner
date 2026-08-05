@@ -37,7 +37,8 @@ from common.edgar_client import get_frame
 from common.sp500_list import get_sp500_constituents
 from common.chart_style import (
     setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle,
-    COLOR_ACCENT
+    mark_last_point, format_last_value_label, finalize_chart,
+    COLOR_ACCENT, COLOR_SECOND
 )
 from common.config import (
     get_current_period_label, OUTPUT_DIR, BUYBACK_XBRL_CONCEPTS, CAPEX_XBRL_CONCEPTS
@@ -46,7 +47,6 @@ from common.config import (
 # Fenêtre courte comme les autres charts EDGAR : le coût API du détail
 # trimestriel sur 10 ans ne se justifie pas, 5 ans suffisent à voir le régime.
 DISPLAY_YEARS = 5
-COLOR_BUYBACKS = "#c0392b"
 
 
 def _quarter_end_date(year: int, quarter: int) -> pd.Timestamp:
@@ -134,33 +134,20 @@ def generate():
     last_row = df.iloc[-1]
 
     ax.plot(df["date"], df["capex_bn"], color=COLOR_ACCENT, linewidth=2.0,
-            marker="o", markersize=3, label="Capex TTM")
-    ax.plot(df["date"], df["buybacks_bn"], color=COLOR_BUYBACKS, linewidth=2.0,
-            marker="o", markersize=3, label="Rachats d'actions TTM")
+            marker="o", markersize=3,
+            label=format_last_value_label("Capex TTM", f"{last_row['capex_bn']:.0f} Md$"))
+    ax.plot(df["date"], df["buybacks_bn"], color=COLOR_SECOND, linewidth=2.0,
+            marker="o", markersize=3,
+            label=format_last_value_label("Rachats d'actions TTM",
+                                          f"{last_row['buybacks_bn']:.0f} Md$"))
+    mark_last_point(ax, last_row["date"], last_row["capex_bn"])
+    mark_last_point(ax, last_row["date"], last_row["buybacks_bn"], color=COLOR_SECOND)
 
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("Milliards de $ (TTM)", fontsize=9)
     ax.set_title("S&P 500 : rachats d'actions vs capex (agrégés, TTM)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
-    ax.legend(loc="upper left", fontsize=8.5, frameon=False)
-
-    ax.plot(last_row["date"], last_row["capex_bn"], marker="o", markersize=5,
-            color=COLOR_ACCENT, zorder=5)
-    ax.annotate(
-        f"{last_row['capex_bn']:.0f} Md$",
-        xy=(last_row["date"], last_row["capex_bn"]),
-        xytext=(10, 0), textcoords="offset points",
-        fontsize=8.5, color=COLOR_ACCENT, fontweight="bold", va="center",
-    )
-    ax.plot(last_row["date"], last_row["buybacks_bn"], marker="o", markersize=5,
-            color=COLOR_BUYBACKS, zorder=5)
-    ax.annotate(
-        f"{last_row['buybacks_bn']:.0f} Md$",
-        xy=(last_row["date"], last_row["buybacks_bn"]),
-        xytext=(10, 0), textcoords="offset points",
-        fontsize=8.5, color=COLOR_BUYBACKS, fontweight="bold", va="center",
-    )
 
     add_source_footer(
         fig,
@@ -174,9 +161,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "22_buybacks_vs_capex.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path)
 
     print(f"[22_buybacks_vs_capex] Graphique sauvegardé: {out_path}")
     return out_path

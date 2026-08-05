@@ -34,11 +34,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle, compute_percentile_rank, COLOR_ACCENT
+    add_freshness_subtitle, mark_last_point, format_last_value_label,
+    finalize_chart, COLOR_ACCENT, COLOR_BENCHMARK
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
-
-COLOR_SP500 = "#aaaaaa"
 
 
 def compute_net_liquidity(years: int = HISTORY_YEARS) -> pd.DataFrame:
@@ -93,17 +92,24 @@ def generate():
 
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
+    last_row = df.iloc[-1]
     line_liq, = ax.plot(df["date"], df["net_liquidity_tn"], color=COLOR_ACCENT, linewidth=1.8,
-                        label="Liquidité nette Fed ($T, éch. gauche)", zorder=3)
+                        label=format_last_value_label(
+                            "Liquidité nette Fed ($T, éch. gauche)", f"{last_row['net_liquidity_tn']:.2f} T$",
+                            series=df["net_liquidity_tn"], years_label=f"{HISTORY_YEARS} ans"),
+                        zorder=3)
 
     sp500_available = df.dropna(subset=["sp500"])
     line_sp500 = None
     if not sp500_available.empty:
         line_sp500, = ax2.plot(sp500_available["date"], sp500_available["sp500"],
-                               color=COLOR_SP500, linewidth=1.3, linestyle="--",
-                               label="S&P 500 (éch. droite)", zorder=2)
+                               color=COLOR_BENCHMARK, linewidth=1.3, linestyle="--",
+                               label=format_last_value_label(
+                                   "S&P 500 (éch. droite)",
+                                   f"{sp500_available['sp500'].iloc[-1]:.0f}"),
+                               zorder=2)
+    mark_last_point(ax, last_row["date"], last_row["net_liquidity_tn"])
 
-    last_row = df.iloc[-1]
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("Liquidité nette ($ trillions)", fontsize=9, color=COLOR_ACCENT)
     ax2.set_ylabel("S&P 500", fontsize=9, color="#888888")
@@ -113,19 +119,6 @@ def generate():
     ax.set_title("Liquidité nette de la Fed (bilan - RRP - TGA) vs S&P 500",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
-
-    handles = [h for h in [line_liq, line_sp500] if h is not None]
-    ax.legend(handles, [h.get_label() for h in handles], loc="upper left", fontsize=8.5, frameon=False)
-
-    pct = compute_percentile_rank(df["net_liquidity_tn"])
-    ax.plot(last_row["date"], last_row["net_liquidity_tn"], marker="o", markersize=5,
-            color=COLOR_ACCENT, zorder=5)
-    ax.annotate(
-        f"{last_row['net_liquidity_tn']:.2f} T$\nPercentile {HISTORY_YEARS} ans: {pct:.0f}e",
-        xy=(last_row["date"], last_row["net_liquidity_tn"]),
-        xytext=(10, 0), textcoords="offset points",
-        fontsize=8.5, color=COLOR_ACCENT, fontweight="bold", va="center",
-    )
 
     add_source_footer(
         fig,
@@ -139,9 +132,8 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "16_net_liquidity_fed.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path,
+                   handles=[h for h in [line_liq, line_sp500] if h is not None])
 
     print(f"[16_net_liquidity_fed] Graphique sauvegardé: {out_path}")
     return out_path

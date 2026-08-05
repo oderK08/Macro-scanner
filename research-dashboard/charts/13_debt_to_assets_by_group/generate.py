@@ -33,7 +33,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from common.edgar_client import get_frame, get_ticker_to_cik_map
 from common.sp500_list import get_sp500_constituents
-from common.chart_style import setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle
+from common.chart_style import (
+    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle,
+    finalize_chart, COLOR_ACCENT, COLOR_SECOND, COLOR_THIRD
+)
 from common.config import (
     get_current_period_label, OUTPUT_DIR, DEBT_XBRL_CONCEPTS,
     HYPERSCALER_TICKERS, NEOCLOUD_TICKERS
@@ -41,9 +44,9 @@ from common.config import (
 
 DISPLAY_YEARS = 5
 GROUP_COLORS = {
-    "Hyperscalers": "#1a3a5c",
-    "Neoclouds": "#c0392b",
-    "Reste du S&P 500": "#8fb8d8",
+    "Hyperscalers": COLOR_ACCENT,
+    "Neoclouds": COLOR_SECOND,
+    "Reste du S&P 500": COLOR_THIRD,
 }
 
 
@@ -165,7 +168,6 @@ def generate():
     ax.set_title("Debt-to-Assets : Hyperscalers vs Neoclouds vs reste du S&P 500",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=8.5, frameon=False)
 
     add_source_footer(
         fig,
@@ -179,9 +181,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "13_debt_to_assets_by_group.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path, legend_ncol=3)
 
     print(f"[13_debt_to_assets_by_group] Graphique sauvegardé: {out_path}")
     return out_path

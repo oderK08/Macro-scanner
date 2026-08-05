@@ -117,12 +117,36 @@ graphique absent de `themes.py` n'est pas perdu : il apparaît en fin de
 rapport dans la section « Autres / à classer » (volontairement visible,
 pour qu'un oubli de classement saute aux yeux).
 
+## Règles de rendu (chart_style.py)
+
+Trois garanties, valables pour tous les graphiques, imposées par
+`common/chart_style.py` :
+
+1. **Aucun texte dans la zone de tracé.** Les valeurs des derniers points et
+   leurs percentiles vivent dans les labels de légende
+   (`format_last_value_label`), la légende est rendue **sous** le graphique
+   par `finalize_chart`, et les repères ponctuels (« hors échelle »,
+   chiffre-clé) passent par le paramètre `note` de `finalize_chart` — même
+   bande basse, hors tracé. Un texte posé au bout d'une courbe finit
+   toujours par chevaucher quelque chose pour certaines valeurs futures des
+   données — interdit sur un projet qui tourne sans surveillance.
+2. **Géométrie unique.** Taille de figure et marges fixes (`FIGSIZE`,
+   `_MARGINS`, pas de `tight_layout`) : chaque PNG fait exactement
+   1500×945 px avec la zone de tracé au même endroit.
+3. **Palette sémantique unique**, par rôle de série (voir le commentaire en
+   tête de `chart_style.py`) : bleu marine = série principale, rouge
+   brique = deuxième série / seuils d'alerte, bleu clair = troisième série,
+   gris pointillé = série de référence/contexte, `tab20` pour le
+   catégoriel (secteurs, tickers, pays).
+
 ## Ajouter un nouveau graphique
 
 1. Créer `charts/NN_nom_du_graphique/`
 2. Copier la structure de `charts/02_sahm_rule/generate.py` comme modèle
 3. Utiliser `common/fred_client.py` et/ou `common/edgar_client.py` pour les
-   données, `common/chart_style.py` pour le rendu
+   données, `common/chart_style.py` pour le rendu — en respectant les trois
+   règles ci-dessus (terminer par `finalize_chart`, jamais de `ax.legend`
+   ni de `ax.annotate`/`ax.text` dans la zone de tracé)
 4. Documenter dans le `README.md` du dossier : séries, calcul, utilité,
    limitations
 5. Le rattacher à un thème dans `common/themes.py` (sinon il sortira dans

@@ -35,7 +35,10 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from common.dbnomics_client import search_series, get_series_observations
-from common.chart_style import setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle
+from common.chart_style import (
+    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle,
+    finalize_chart
+)
 from common.config import get_current_period_label, OUTPUT_DIR
 
 PROVIDER = "IMF"
@@ -175,21 +178,20 @@ def generate():
     ax.set_title(f"Top {TOP_N_BUYERS} des banques centrales ayant le plus acheté d'or sur {DISPLAY_YEARS} ans",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=8.5, frameon=False)
 
     # Pays de référence (États-Unis) : un simple repère textuel hors échelle,
     # pas une ligne complète -- leurs réserves (~8 133 tonnes, quasi figées
     # depuis les années 1970) écraseraient sinon toute l'échelle et
-    # rendraient les acheteurs actifs illisibles.
+    # rendraient les acheteurs actifs illisibles. Rendu via la note de
+    # finalize_chart : hors de la zone de tracé, sous le graphique.
+    reference_notes = []
     for ref_country in REFERENCE_COUNTRIES:
         sub = df[df["country"] == ref_country].sort_values("date")
         if sub.empty:
             continue
         last_value = sub["gold_tonnes"].iloc[-1]
-        ax.annotate(
-            f"Repère : {ref_country}\n≈ {last_value:,.0f} t (hors échelle)".replace(",", " "),
-            xy=(1.0, 0.97), xycoords="axes fraction",
-            ha="right", va="top", fontsize=8, color="#888888", style="italic",
+        reference_notes.append(
+            f"Repère : {ref_country} ≈ {last_value:,.0f} t (hors échelle)".replace(",", " ")
         )
 
     add_source_footer(
@@ -204,9 +206,8 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "15_central_bank_gold_reserves.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path, legend_ncol=3,
+                   note=" | ".join(reference_notes) if reference_notes else None)
 
     print(f"[15_central_bank_gold_reserves] Graphique sauvegardé: {out_path}")
     return out_path

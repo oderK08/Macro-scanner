@@ -138,9 +138,6 @@ def build_report(period_label: str = None, output_path: str = None):
     section_title_style = ParagraphStyle(
         "SectionTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=8,
     )
-    chart_title_style = ParagraphStyle(
-        "ChartTitle", parent=styles["Heading2"], fontSize=12, spaceAfter=4,
-    )
     body_style = ParagraphStyle(
         "Body", parent=styles["Normal"], fontSize=9.5, leading=13, alignment=TA_LEFT,
     )
@@ -234,13 +231,19 @@ def build_report(period_label: str = None, output_path: str = None):
     unit_height = usable_height / CHARTS_PER_PAGE - 0.15 * inch
     image_col_width = usable_width * 0.60
     text_col_width = usable_width * 0.40
-    image_max_height = (unit_height - 0.35 * inch) * 0.92  # marge de sécurité (paddings, interlignage)
+    # Plus de titre séparé au-dessus de chaque image (chaque PNG porte déjà
+    # son propre titre) : la hauteur libérée revient à l'image.
+    image_max_height = (unit_height - 0.10 * inch) * 0.95
 
-    def _build_unit(chart_dir, png_path, title, text, max_image_height=None):
+    def _build_unit(chart_dir, png_path, text, max_image_height=None):
         if max_image_height is None:
             max_image_height = image_max_height
+        # Pas de titre reportlab au-dessus de l'image : chaque PNG contient
+        # déjà son titre (ax.set_title) -- l'afficher deux fois créait un
+        # doublon typographique lourd sur chaque page. Le titre extrait des
+        # README ne sert plus qu'au sommaire.
         image_flowable = _fit_image(png_path, image_col_width - 0.1 * inch, max_image_height)
-        left_cell = [Paragraph(title, chart_title_style), image_flowable]
+        left_cell = [image_flowable]
         right_cell = [Paragraph(text, body_style)] if text else [Spacer(1, 1)]
 
         unit_table = Table(
@@ -287,8 +290,8 @@ def build_report(period_label: str = None, output_path: str = None):
                 image_max_height - banner_height / CHARTS_PER_PAGE
                 if is_banner_page else image_max_height
             )
-            for j, (_theme, chart_dir, png_path, title, text) in enumerate(batch):
-                story.append(_build_unit(chart_dir, png_path, title, text,
+            for j, (_theme, chart_dir, png_path, _title, text) in enumerate(batch):
+                story.append(_build_unit(chart_dir, png_path, text,
                                          max_image_height=unit_image_height))
                 if j < len(batch) - 1:
                     story.append(Spacer(1, 0.15 * inch))

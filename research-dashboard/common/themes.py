@@ -26,6 +26,7 @@ THEMES = [
         "18_real_yield_breakeven",
     ]),
     ("Cycle & marché du travail", [
+        "28_gdpnow_vs_gdp",
         "02_sahm_rule",
         "05_jolts_quits_vs_wages",
     ]),
@@ -34,10 +35,15 @@ THEMES = [
     ]),
     ("Crédit & marchés actions", [
         "03_hy_credit_spread_vs_sp500",
+        "25_sloos_credit_standards",
         "19_vix_vs_hy_spread",
+        "27_cot_positioning",
     ]),
     ("Devises & flux globaux", [
         "20_dollar_index_vs_10y_yield",
+    ]),
+    ("Budget fédéral & dette US", [
+        "26_federal_interest_burden",
     ]),
     ("Consommateur & ménages", [
         "08_debt_service_vs_savings",

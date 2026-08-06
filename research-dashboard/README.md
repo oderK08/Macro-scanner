@@ -48,6 +48,8 @@ research-dashboard/
 ├── data_cache/               # CSV bruts (cache incrémental, régénérable)
 ├── output/                  # PNG générés, un sous-dossier par période (2026S2, etc.)
 ├── run_all.py                # génère tous les graphiques d'un coup
+├── generate_commentary.py    # commentaire IA d'interprétation par graphique (API Anthropic, optionnel)
+├── compile_report.py         # compile les PNG + commentaires en rapport PDF
 ├── requirements.txt
 ├── .env.example
 └── .gitignore
@@ -121,6 +123,24 @@ graphique ne demande ni renommage de dossier, ni perte de cache. Un
 graphique absent de `themes.py` n'est pas perdu : il apparaît en fin de
 rapport dans la section « Autres / à classer » (volontairement visible,
 pour qu'un oubli de classement saute aux yeux).
+
+## Commentaire IA d'interprétation (generate_commentary.py)
+
+Après la génération des PNG, `generate_commentary.py` envoie chaque
+graphique (image + README) à l'API Anthropic et obtient un court paragraphe
+d'interprétation de la configuration actuelle : ce que montre le dernier
+point, la tendance récente, et ce que ça implique pour le comité. Les
+commentaires sont écrits dans `output/{période}/commentary.json`, et le
+rapport PDF les affiche **sous le résumé statique du README**, en italique,
+avec la mention « Lecture du moment » et la date de génération.
+
+Cet enrichissement est **optionnel et jamais bloquant** : sans la clé
+`ANTHROPIC_API_KEY` (secret GitHub), ou si l'API est en panne, le script se
+retire proprement et le rapport se limite aux résumés des README. Une
+erreur sur un graphique n'empêche pas les autres, et un commentaire déjà
+généré n'est jamais écrasé par du vide. Le modèle utilisé (`claude-opus-5`
+par défaut) est surchargeable via la variable d'environnement
+`COMMENTARY_MODEL`, sans toucher au code.
 
 ## Règles de rendu (chart_style.py)
 

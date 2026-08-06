@@ -3,10 +3,11 @@ Compile tous les graphiques générés (output/{periode}/*.png) en un seul
 rapport PDF, façon note de recherche : page de garde, sommaire, puis 2
 graphiques par page avec un commentaire analytique à côté de chacun.
 
-Priorité du texte affiché à côté de chaque graphique :
-  1. Le commentaire généré via l'API Anthropic (output/{periode}/commentary.json),
-     s'il existe pour ce graphique -- voir generate_commentary.py
-  2. À défaut, le résumé statique tiré du README du graphique
+Texte affiché à côté de chaque graphique :
+  1. Le résumé statique tiré du README du graphique (toujours affiché)
+  2. En dessous, s'il existe, le commentaire d'interprétation de la
+     configuration actuelle généré via l'API Anthropic
+     (output/{periode}/commentary.json -- voir generate_commentary.py)
 
 Usage :
     python compile_report.py                # période courante (auto-détectée)
@@ -27,7 +28,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image, Table, TableStyle
+    SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image, Table, TableStyle,
+    KeepInFrame,
 )
 from reportlab.lib import colors
 from PIL import Image as PILImage
@@ -141,6 +143,20 @@ def build_report(period_label: str = None, output_path: str = None):
     body_style = ParagraphStyle(
         "Body", parent=styles["Normal"], fontSize=9.5, leading=13, alignment=TA_LEFT,
     )
+    # Commentaire IA affiché sous le résumé du README : italique + filet de
+    # couleur pour qu'on distingue d'un coup d'œil le texte statique de la
+    # lecture du moment.
+    commentary_label_style = ParagraphStyle(
+        "CommentaryLabel", parent=styles["Normal"], fontSize=8,
+        textColor=colors.HexColor("#1a3a5c"), fontName="Helvetica-Bold",
+        spaceBefore=8, spaceAfter=2,
+    )
+    commentary_style = ParagraphStyle(
+        "Commentary", parent=body_style, fontName="Helvetica-Oblique",
+        textColor=colors.HexColor("#333333"),
+        borderColor=colors.HexColor("#1a3a5c"), borderWidth=0,
+        leftIndent=6,
+    )
 
     doc = SimpleDocTemplate(
         output_path, pagesize=PAGE_SIZE,
@@ -169,7 +185,14 @@ def build_report(period_label: str = None, output_path: str = None):
     themed_charts = ordered_chart_dirs(chart_dirs)
 
     toc_rows = []       # lignes du sommaire ; None en col 0 = ligne de thème
-    chart_pages = []    # (theme, chart_dir, png_path, title, text)
+    chart_pages = []    # (theme, chart_dir, png_path, title, summary, commentary)
+
+    # Métadonnées du fichier de commentaires (date de génération) : servent
+    # au libellé au-dessus de chaque commentaire IA.
+    commentary_meta = commentaries.get("_meta", {})
+    commentary_label = "Lecture du moment — commentaire généré par IA"
+    if isinstance(commentary_meta, dict) and commentary_meta.get("generated_at"):
+        commentary_label += f" ({commentary_meta['generated_at']})"
 
     current_theme = None
     for theme, chart_dir in themed_charts:
@@ -188,12 +211,13 @@ def build_report(period_label: str = None, output_path: str = None):
 
         if png_candidates:
             png_path = os.path.join(charts_output_dir, png_candidates[0])
-            analysis_text = commentaries.get(chart_dir, "").strip()
-            text = analysis_text if analysis_text else fallback_summary
+            commentary = str(commentaries.get(chart_dir, "") or "").strip()
             # Pas de mention "Inclus" : être dans le sommaire suffit, seule
             # l'absence d'un graphique mérite une mention explicite.
             toc_rows.append([num_prefix, title, ""])
-            chart_pages.append((theme, chart_dir, png_path, title, text))
+            chart_pages.append(
+                (theme, chart_dir, png_path, title, fallback_summary, commentary)
+            )
         else:
             toc_rows.append([num_prefix, title, "Non disponible cette période"])
             print(f"[compile_report] {chart_dir}: pas de PNG trouvé pour cette période, ignoré dans le rapport.")
@@ -235,7 +259,7 @@ def build_report(period_label: str = None, output_path: str = None):
     # son propre titre) : la hauteur libérée revient à l'image.
     image_max_height = (unit_height - 0.10 * inch) * 0.95
 
-    def _build_unit(chart_dir, png_path, text, max_image_height=None):
+    def _build_unit(chart_dir, png_path, summary, commentary, max_image_height=None):
         if max_image_height is None:
             max_image_height = image_max_height
         # Pas de titre reportlab au-dessus de l'image : chaque PNG contient
@@ -244,7 +268,24 @@ def build_report(period_label: str = None, output_path: str = None):
         # README ne sert plus qu'au sommaire.
         image_flowable = _fit_image(png_path, image_col_width - 0.1 * inch, max_image_height)
         left_cell = [image_flowable]
-        right_cell = [Paragraph(text, body_style)] if text else [Spacer(1, 1)]
+
+        # Résumé statique du README, puis en dessous le commentaire IA de la
+        # configuration actuelle (s'il existe pour ce graphique).
+        text_flowables = []
+        if summary:
+            text_flowables.append(Paragraph(summary, body_style))
+        if commentary:
+            text_flowables.append(Paragraph(commentary_label, commentary_label_style))
+            text_flowables.append(Paragraph(commentary, commentary_style))
+        if not text_flowables:
+            text_flowables = [Spacer(1, 1)]
+        # KeepInFrame en mode "shrink" : si résumé + commentaire dépassent la
+        # hauteur allouée, le bloc de texte est réduit pour tenir -- le
+        # rapport reste lisible quelle que soit la longueur des textes,
+        # aucune maintenance de mise en page à prévoir.
+        right_cell = [KeepInFrame(
+            text_col_width - 14, max_image_height, text_flowables, mode="shrink"
+        )]
 
         unit_table = Table(
             [[left_cell, right_cell]],
@@ -290,8 +331,8 @@ def build_report(period_label: str = None, output_path: str = None):
                 image_max_height - banner_height / CHARTS_PER_PAGE
                 if is_banner_page else image_max_height
             )
-            for j, (_theme, chart_dir, png_path, _title, text) in enumerate(batch):
-                story.append(_build_unit(chart_dir, png_path, text,
+            for j, (_theme, chart_dir, png_path, _title, summary, commentary) in enumerate(batch):
+                story.append(_build_unit(chart_dir, png_path, summary, commentary,
                                          max_image_height=unit_image_height))
                 if j < len(batch) - 1:
                     story.append(Spacer(1, 0.15 * inch))
@@ -301,7 +342,7 @@ def build_report(period_label: str = None, output_path: str = None):
         story.pop()  # éviter une dernière page blanche
 
     doc.build(story)
-    n_with_analysis = sum(1 for c in chart_pages if commentaries.get(c[1], "").strip())
+    n_with_analysis = sum(1 for c in chart_pages if c[5])
     print(
         f"[compile_report] Rapport PDF généré: {output_path} "
         f"({len(chart_pages)} graphiques, {n_with_analysis} avec commentaire analytique)"

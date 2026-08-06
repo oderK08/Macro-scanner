@@ -134,9 +134,12 @@ commentaires sont écrits dans `output/{période}/commentary.json`, et le
 rapport PDF les affiche **sous le résumé statique du README**, en italique,
 avec la mention « Lecture du moment » et la date de génération.
 
-Cet enrichissement est **optionnel et jamais bloquant** : sans la clé
-`ANTHROPIC_API_KEY` (secret GitHub), ou si l'API est en panne, le script se
-retire proprement et le rapport se limite aux résumés des README. Une
+Cet enrichissement est **optionnel et jamais bloquant** : dans le workflow
+GitHub Actions, une case à cocher « commentaire IA » au lancement du run
+décide s'il tourne (décochée par défaut — aucun crédit API consommé sans
+choix explicite). Même cochée, sans la clé `ANTHROPIC_API_KEY` (secret
+GitHub) ou si l'API est en panne, le script se retire proprement et le
+rapport se limite aux résumés des README. Une
 erreur sur un graphique n'empêche pas les autres, et un commentaire déjà
 généré n'est jamais écrasé par du vide. Le modèle utilisé (`claude-opus-5`
 par défaut) est surchargeable via la variable d'environnement

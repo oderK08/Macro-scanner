@@ -2,6 +2,11 @@ name: Générer les graphiques
 
 on:
   workflow_dispatch:
+    inputs:
+      commentaire_ia:
+        description: "Générer les commentaires IA (API Anthropic — consomme des crédits)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,10 +35,13 @@ jobs:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: python run_all.py
 
-      # Étape optionnelle : sans le secret ANTHROPIC_API_KEY, le script se
-      # retire proprement (code 0) et le rapport garde les résumés statiques
-      # des README. Une panne de l'API Anthropic ne bloque jamais le rapport.
+      # Étape doublement optionnelle : ne tourne que si la case "commentaire
+      # IA" a été cochée au lancement du run ; et même cochée, sans le secret
+      # ANTHROPIC_API_KEY le script se retire proprement (code 0), le rapport
+      # gardant les résumés statiques des README. Une panne de l'API
+      # Anthropic ne bloque jamais le rapport.
       - name: Générer les commentaires IA (interprétation du moment)
+        if: ${{ inputs.commentaire_ia }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python generate_commentary.py

@@ -36,7 +36,7 @@ from common.edgar_client import get_frame
 from common.sp500_list import get_sp500_constituents
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle
+    add_freshness_subtitle, finalize_chart
 )
 from common.config import get_current_period_label, OUTPUT_DIR, REVENUE_XBRL_CONCEPTS, OPERATING_INCOME_XBRL_CONCEPTS
 
@@ -178,7 +178,6 @@ def generate():
     ax.set_title("Marges opérationnelles par secteur GICS (TTM)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=7, frameon=False, ncol=2)
 
     add_source_footer(
         fig,
@@ -192,9 +191,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "11_sector_operating_margins.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path, legend_ncol=4)
 
     print(f"[11_sector_operating_margins] Graphique sauvegardé: {out_path}")
     return out_path

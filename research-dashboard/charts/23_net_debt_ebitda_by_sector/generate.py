@@ -47,7 +47,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.edgar_client import get_frame
 from common.sp500_list import get_sp500_constituents
 from common.chart_style import (
-    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle
+    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle,
+    finalize_chart, COLOR_SECOND
 )
 from common.config import (
     get_current_period_label, OUTPUT_DIR, DEBT_XBRL_CONCEPTS, CASH_XBRL_CONCEPTS,
@@ -186,7 +187,7 @@ def generate():
                 linewidth=1.8, marker="o", markersize=3, label=sector)
 
     # Repères de lecture : seuils usuels agences de notation / covenants
-    ax.axhline(3, color="#c0392b", linewidth=0.8, linestyle=":", alpha=0.7)
+    ax.axhline(3, color=COLOR_SECOND, linewidth=0.8, linestyle=":", alpha=0.7)
     ax.axhline(0, color="#555555", linewidth=0.8, linestyle="--", alpha=0.6)
 
     format_date_axis(ax, tight_to_last_point=last_date)
@@ -194,7 +195,6 @@ def generate():
     ax.set_title("Dette nette / EBITDA par secteur GICS (S&P 500, hors Financières)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=7, frameon=False, ncol=2)
 
     add_source_footer(
         fig,
@@ -208,9 +208,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "23_net_debt_ebitda_by_sector.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path, legend_ncol=4)
 
     print(f"[23_net_debt_ebitda_by_sector] Graphique sauvegardé: {out_path}")
     return out_path

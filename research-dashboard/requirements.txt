@@ -1,8 +1,14 @@
-fredapi>=0.5.1
-requests>=2.31
-pandas>=2.0
-matplotlib>=3.8
-python-dateutil>=2.8
-lxml>=5.0
-reportlab>=4.0
+# Bornes supérieures sur les versions MAJEURES : le projet doit pouvoir être
+# relancé dans plusieurs années sans qu'un pandas 3.x ou matplotlib 4.x aux
+# API incompatibles ne casse silencieusement les graphiques. Le workflow
+# GitHub Actions épingle déjà Python 3.11 -- ces bornes verrouillent l'autre
+# moitié de l'environnement. À relever volontairement (et tester) le jour où
+# une montée de version est souhaitée.
+fredapi>=0.5.1,<1
+requests>=2.31,<3
+pandas>=2.0,<3
+matplotlib>=3.8,<4
+python-dateutil>=2.8,<3
+lxml>=5.0,<7
+reportlab>=4.0,<5
 Pillow>=10.0

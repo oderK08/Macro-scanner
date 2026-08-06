@@ -33,7 +33,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from common.edgar_client import get_frame, get_ticker_to_cik_map
 from common.chart_style import (
-    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle, COLOR_ACCENT
+    setup_figure, add_source_footer, format_date_axis, add_freshness_subtitle,
+    finalize_chart, COLOR_ACCENT
 )
 from common.config import get_current_period_label, OUTPUT_DIR, CAPEX_XBRL_CONCEPTS, MEGACAP_CAPEX_TICKERS
 
@@ -172,7 +173,6 @@ def generate():
     ax.set_title("Accélération du capex des méga-caps (proxy de révision)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_date)
-    ax.legend(loc="upper left", fontsize=8, frameon=False, ncol=2)
 
     add_source_footer(
         fig,
@@ -186,9 +186,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "10_capex_guidance_revisions_megacaps.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path, legend_ncol=5)
 
     print(f"[10_capex_guidance_revisions_megacaps] Graphique sauvegardé: {out_path}")
     return out_path

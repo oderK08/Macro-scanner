@@ -27,11 +27,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle, compute_percentile_rank, COLOR_ACCENT
+    add_freshness_subtitle, mark_last_point, format_last_value_label,
+    finalize_chart, COLOR_ACCENT, COLOR_SECOND
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
-
-COLOR_VIX = "#7d3c98"
 
 
 def compute_vix_vs_hy(years: int = HISTORY_YEARS) -> pd.DataFrame:
@@ -65,15 +64,25 @@ def generate():
 
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
-    line_vix, = ax.plot(df["date"], df["vix"], color=COLOR_VIX, linewidth=1.2,
-                        label="VIX (éch. gauche)", zorder=2, alpha=0.85)
-    line_hy, = ax2.plot(df["date"], df["hy_spread"], color=COLOR_ACCENT, linewidth=1.6,
-                        label="Spread HY OAS (%, éch. droite)", zorder=3)
-
+    # Percentile de CHAQUE série dans son label de légende : c'est la
+    # comparaison des deux percentiles qui fait la lecture du chart
+    # (divergence ou pas).
     last_row = df.iloc[-1]
+    line_vix, = ax.plot(df["date"], df["vix"], color=COLOR_SECOND, linewidth=1.2,
+                        label=format_last_value_label("VIX (éch. gauche)", f"{last_row['vix']:.1f}",
+                                                      series=df["vix"]),
+                        zorder=2, alpha=0.85)
+    line_hy, = ax2.plot(df["date"], df["hy_spread"], color=COLOR_ACCENT, linewidth=1.6,
+                        label=format_last_value_label("Spread HY OAS (%, éch. droite)",
+                                                      f"{last_row['hy_spread']:.2f}%",
+                                                      series=df["hy_spread"]),
+                        zorder=3)
+    mark_last_point(ax, last_row["date"], last_row["vix"], color=COLOR_SECOND)
+    mark_last_point(ax2, last_row["date"], last_row["hy_spread"])
+
     format_date_axis(ax, tight_to_last_point=last_row["date"])
-    ax.set_ylabel("VIX", fontsize=9, color=COLOR_VIX)
-    ax.tick_params(axis="y", colors=COLOR_VIX)
+    ax.set_ylabel("VIX", fontsize=9, color=COLOR_SECOND)
+    ax.tick_params(axis="y", colors=COLOR_SECOND)
     ax2.set_ylabel("Spread HY OAS (%)", fontsize=9, color=COLOR_ACCENT)
     ax2.tick_params(colors=COLOR_ACCENT, labelsize=9)
     ax2.spines["top"].set_visible(False)
@@ -82,34 +91,9 @@ def generate():
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
 
-    handles = [line_vix, line_hy]
-    ax.legend(handles, [h.get_label() for h in handles], loc="upper left",
-              fontsize=8.5, frameon=False)
-
-    # Derniers points, avec le percentile de chacun : c'est la comparaison
-    # des DEUX percentiles qui fait la lecture du chart (divergence ou pas)
-    pct_vix = compute_percentile_rank(df["vix"])
-    pct_hy = compute_percentile_rank(df["hy_spread"])
-    ax.plot(last_row["date"], last_row["vix"], marker="o", markersize=5,
-            color=COLOR_VIX, zorder=5)
-    ax.annotate(
-        f"VIX {last_row['vix']:.1f} (P{pct_vix:.0f})",
-        xy=(last_row["date"], last_row["vix"]),
-        xytext=(10, -5), textcoords="offset points",
-        fontsize=8.5, color=COLOR_VIX, fontweight="bold", va="top",
-    )
-    ax2.plot(last_row["date"], last_row["hy_spread"], marker="o", markersize=5,
-             color=COLOR_ACCENT, zorder=5)
-    ax2.annotate(
-        f"HY {last_row['hy_spread']:.2f}% (P{pct_hy:.0f})",
-        xy=(last_row["date"], last_row["hy_spread"]),
-        xytext=(10, 5), textcoords="offset points",
-        fontsize=8.5, color=COLOR_ACCENT, fontweight="bold", va="bottom",
-    )
-
     add_source_footer(
         fig,
-        "Source: FRED (VIXCLS, BAMLH0A0HYM2) | P = percentile sur la fenêtre affichée. "
+        "Source: FRED (VIXCLS, BAMLH0A0HYM2) | Percentiles sur la fenêtre affichée. "
         "Divergence entre les deux percentiles = un marché price un risque que l'autre ignore",
         as_of_date=last_row["date"],
     )
@@ -119,9 +103,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "19_vix_vs_hy_spread.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path, handles=[line_vix, line_hy])
 
     print(f"[19_vix_vs_hy_spread] Graphique sauvegardé: {out_path}")
     return out_path

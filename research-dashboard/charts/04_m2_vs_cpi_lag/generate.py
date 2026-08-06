@@ -28,12 +28,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle, highlight_last_point, COLOR_ACCENT
+    add_freshness_subtitle, mark_last_point, format_last_value_label,
+    finalize_chart, COLOR_ACCENT, COLOR_SECOND
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
 
 LAG_MONTHS = 15  # milieu de la fourchette 12-18 mois évoquée par la littérature monétariste
-COLOR_CPI = "#c0392b"
 
 
 def compute_m2_vs_cpi_lag(years: int = HISTORY_YEARS, lag_months: int = LAG_MONTHS) -> pd.DataFrame:
@@ -83,24 +83,19 @@ def generate():
     fig, ax = setup_figure()
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
+    last_row = df.iloc[-1]
     ax.plot(df["date"], df["m2_yoy"], color=COLOR_ACCENT, linewidth=2.0,
-            label="M2 YoY (%)")
-    ax.plot(df["date"], df["cpi_yoy_shifted"], color=COLOR_CPI, linewidth=1.8, linestyle="--",
+            label=format_last_value_label("M2 YoY", f"{last_row['m2_yoy']:.1f}%"))
+    ax.plot(df["date"], df["cpi_yoy_shifted"], color=COLOR_SECOND, linewidth=1.8, linestyle="--",
             label=f"CPI YoY (%), décalé de {LAG_MONTHS} mois")
     ax.axhline(0, color="#999999", linewidth=0.8)
+    mark_last_point(ax, last_row["date"], last_row["m2_yoy"])
 
-    last_row = df.iloc[-1]
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("%", fontsize=9)
     ax.set_title(f"M2 YoY vs CPI YoY (décalé de {LAG_MONTHS} mois)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
-    ax.legend(loc="upper left", fontsize=8.5, frameon=False)
-
-    highlight_last_point(
-        ax, last_row["date"], last_row["m2_yoy"],
-        value_label=f"M2 YoY: {last_row['m2_yoy']:.1f}%",
-    )
 
     add_source_footer(
         fig,
@@ -113,9 +108,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "04_m2_vs_cpi_lag.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path)
 
     print(f"[04_m2_vs_cpi_lag] Graphique sauvegardé: {out_path}")
     return out_path

@@ -23,11 +23,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle, compute_percentile_rank, COLOR_ACCENT
+    add_freshness_subtitle, mark_last_point, format_last_value_label,
+    finalize_chart, COLOR_ACCENT, COLOR_BENCHMARK
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
-
-COLOR_SP500 = "#aaaaaa"
 
 
 def compute_hy_spread_vs_sp500(years: int = HISTORY_YEARS) -> pd.DataFrame:
@@ -56,12 +55,18 @@ def generate():
 
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
-    line_spread, = ax.plot(df["date"], df["hy_spread"], color=COLOR_ACCENT, linewidth=1.8,
-                            label="Spread HY OAS (%, éch. gauche)", zorder=3)
-    line_sp500, = ax2.plot(df["date"], df["sp500"], color=COLOR_SP500, linewidth=1.3, linestyle="--",
-                            label="S&P 500 (éch. droite)", zorder=2)
-
     last_row = df.iloc[-1]
+    line_spread, = ax.plot(df["date"], df["hy_spread"], color=COLOR_ACCENT, linewidth=1.8,
+                           label=format_last_value_label(
+                               "Spread HY OAS (%, éch. gauche)", f"{last_row['hy_spread']:.2f}%",
+                               series=df["hy_spread"], years_label=f"{HISTORY_YEARS} ans"),
+                           zorder=3)
+    line_sp500, = ax2.plot(df["date"], df["sp500"], color=COLOR_BENCHMARK, linewidth=1.3, linestyle="--",
+                           label=format_last_value_label("S&P 500 (éch. droite)",
+                                                         f"{last_row['sp500']:.0f}"),
+                           zorder=2)
+    mark_last_point(ax, last_row["date"], last_row["hy_spread"])
+
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("Spread HY OAS (%)", fontsize=9, color=COLOR_ACCENT)
     ax2.set_ylabel("S&P 500", fontsize=9, color="#888888")
@@ -71,26 +76,6 @@ def generate():
     ax.set_title("Spread crédit High Yield vs S&P 500",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
-
-    # Légende combinée (les deux lignes sont sur deux axes différents)
-    handles = [line_spread, line_sp500]
-    labels = [h.get_label() for h in handles]
-    ax.legend(handles, labels, loc="upper left", fontsize=8.5, frameon=False)
-
-    # Marqueur + annotation sur le dernier point du spread (la série la plus
-    # informative pour ce chart)
-    pct = compute_percentile_rank(df["hy_spread"])
-    ax.plot(last_row["date"], last_row["hy_spread"], marker="o", markersize=5, color=COLOR_ACCENT, zorder=5)
-    ax.annotate(
-        f"{last_row['hy_spread']:.2f}%\nPercentile {HISTORY_YEARS} ans: {pct:.0f}e",
-        xy=(last_row["date"], last_row["hy_spread"]),
-        xytext=(55, 0),
-        textcoords="offset points",
-        fontsize=8.5,
-        color=COLOR_ACCENT,
-        fontweight="bold",
-        va="center",
-    )
 
     add_source_footer(
         fig, "Source: FRED (BAMLH0A0HYM2, SP500)",
@@ -102,9 +87,8 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "03_hy_credit_spread_vs_sp500.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    # Légende combinée passée explicitement (les deux lignes vivent sur deux axes)
+    finalize_chart(fig, ax, out_path, handles=[line_spread, line_sp500])
 
     print(f"[03_hy_credit_spread_vs_sp500] Graphique sauvegardé: {out_path}")
     return out_path

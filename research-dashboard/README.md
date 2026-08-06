@@ -14,6 +14,7 @@ research-dashboard/
 │   ├── cache_utils.py       # cache local incrémental (CSV)
 │   ├── fred_client.py       # wrapper FRED + cache
 │   ├── edgar_client.py      # wrapper SEC EDGAR + rate limiting + cache
+│   ├── cftc_client.py       # wrapper API CFTC (COT) + rate limiting + cache
 │   ├── chart_style.py       # style matplotlib partagé, percentile/z-score
 │   └── themes.py            # regroupement thématique des graphiques (pilote l'ordre du rapport PDF)
 ├── charts/                  # un dossier par graphique
@@ -39,7 +40,11 @@ research-dashboard/
 │   ├── 21_mortgage_vs_housing_starts/          🆕 implémenté, 1er run réel à valider — Consommateur / ménages
 │   ├── 22_buybacks_vs_capex/                   🆕 implémenté, 1er run réel à valider — Corporate / secteurs
 │   ├── 23_net_debt_ebitda_by_sector/           🆕 implémenté, 1er run réel à valider — Corporate / secteurs
-│   └── 24_earnings_growth_vs_price_growth/     🆕 implémenté, 1er run réel à valider — Corporate / secteurs
+│   ├── 24_earnings_growth_vs_price_growth/     🆕 implémenté, 1er run réel à valider — Corporate / secteurs
+│   ├── 25_sloos_credit_standards/              🆕 implémenté, 1er run réel à valider — Crédit & marchés
+│   ├── 26_federal_interest_burden/             🆕 implémenté, 1er run réel à valider — Budget fédéral & dette US
+│   ├── 27_cot_positioning/                     ⚠️ implémenté, source CFTC non éprouvée — Crédit & marchés
+│   └── 28_gdpnow_vs_gdp/                       🆕 implémenté, 1er run réel à valider — Cycle & emploi
 ├── data_cache/               # CSV bruts (cache incrémental, régénérable)
 ├── output/                  # PNG générés, un sous-dossier par période (2026S2, etc.)
 ├── run_all.py                # génère tous les graphiques d'un coup
@@ -117,12 +122,36 @@ graphique absent de `themes.py` n'est pas perdu : il apparaît en fin de
 rapport dans la section « Autres / à classer » (volontairement visible,
 pour qu'un oubli de classement saute aux yeux).
 
+## Règles de rendu (chart_style.py)
+
+Trois garanties, valables pour tous les graphiques, imposées par
+`common/chart_style.py` :
+
+1. **Aucun texte dans la zone de tracé.** Les valeurs des derniers points et
+   leurs percentiles vivent dans les labels de légende
+   (`format_last_value_label`), la légende est rendue **sous** le graphique
+   par `finalize_chart`, et les repères ponctuels (« hors échelle »,
+   chiffre-clé) passent par le paramètre `note` de `finalize_chart` — même
+   bande basse, hors tracé. Un texte posé au bout d'une courbe finit
+   toujours par chevaucher quelque chose pour certaines valeurs futures des
+   données — interdit sur un projet qui tourne sans surveillance.
+2. **Géométrie unique.** Taille de figure et marges fixes (`FIGSIZE`,
+   `_MARGINS`, pas de `tight_layout`) : chaque PNG fait exactement
+   1500×945 px avec la zone de tracé au même endroit.
+3. **Palette sémantique unique**, par rôle de série (voir le commentaire en
+   tête de `chart_style.py`) : bleu marine = série principale, rouge
+   brique = deuxième série / seuils d'alerte, bleu clair = troisième série,
+   gris pointillé = série de référence/contexte, `tab20` pour le
+   catégoriel (secteurs, tickers, pays).
+
 ## Ajouter un nouveau graphique
 
 1. Créer `charts/NN_nom_du_graphique/`
 2. Copier la structure de `charts/02_sahm_rule/generate.py` comme modèle
 3. Utiliser `common/fred_client.py` et/ou `common/edgar_client.py` pour les
-   données, `common/chart_style.py` pour le rendu
+   données, `common/chart_style.py` pour le rendu — en respectant les trois
+   règles ci-dessus (terminer par `finalize_chart`, jamais de `ax.legend`
+   ni de `ax.annotate`/`ax.text` dans la zone de tracé)
 4. Documenter dans le `README.md` du dossier : séries, calcul, utilité,
    limitations
 5. Le rattacher à un thème dans `common/themes.py` (sinon il sortira dans

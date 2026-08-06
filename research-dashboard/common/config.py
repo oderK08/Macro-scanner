@@ -117,6 +117,17 @@ NEOCLOUD_TICKERS = ["CRWV", "NBIS", "IREN", "APLD", "CORZ", "WULF", "CIFR"]
 # généralement taguées séparément.
 DEBT_XBRL_CONCEPTS = ["DebtCurrent", "LongTermDebtNoncurrent"]
 
+# --- Contrats CFTC suivis (chart 27, positionnement spéculatif) -------------
+# Identifiés par leur code CFTC, PAS par leur nom : les noms de contrats
+# sont réécrits par la CFTC au fil des ans, les codes sont stables sur des
+# décennies (voir common/cftc_client.py). Codes établis de longue date,
+# à valider au premier run réel comme toute nouvelle source du projet.
+COT_CONTRACTS = {
+    "E-mini S&P 500": "13874A",
+    "T-Note 10 ans": "043602",
+    "Dollar Index (ICE)": "098662",
+}
+
 # Concepts XBRL candidats pour les rachats d'actions (fallback -- un seul
 # concept "gagne" par entreprise, comme capex/revenus). Le premier est le
 # concept standard, le second une variante utilisée par certaines

@@ -35,11 +35,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle, compute_percentile_rank, COLOR_ACCENT
+    add_freshness_subtitle, mark_last_point, format_last_value_label,
+    finalize_chart, COLOR_ACCENT, COLOR_BENCHMARK
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
-
-COLOR_YIELD = "#888888"
 
 
 def compute_dollar_vs_yield(years: int = HISTORY_YEARS) -> pd.DataFrame:
@@ -73,35 +72,28 @@ def generate():
 
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
-    line_dollar, = ax.plot(df["date"], df["dollar_index"], color=COLOR_ACCENT, linewidth=1.7,
-                           label="Dollar pondéré échanges (éch. gauche)", zorder=3)
-    line_yield, = ax2.plot(df["date"], df["yield_10y"], color=COLOR_YIELD, linewidth=1.2,
-                           linestyle="--", label="Taux 10 ans US (%, éch. droite)", zorder=2)
-
     last_row = df.iloc[-1]
+    line_dollar, = ax.plot(df["date"], df["dollar_index"], color=COLOR_ACCENT, linewidth=1.7,
+                           label=format_last_value_label(
+                               "Dollar pondéré échanges (éch. gauche)", f"{last_row['dollar_index']:.1f}",
+                               series=df["dollar_index"], years_label=f"{HISTORY_YEARS} ans"),
+                           zorder=3)
+    line_yield, = ax2.plot(df["date"], df["yield_10y"], color=COLOR_BENCHMARK, linewidth=1.2,
+                           linestyle="--",
+                           label=format_last_value_label("Taux 10 ans US (%, éch. droite)",
+                                                         f"{last_row['yield_10y']:.2f}%"),
+                           zorder=2)
+    mark_last_point(ax, last_row["date"], last_row["dollar_index"])
+
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("Indice dollar large (jan. 2006 = 100)", fontsize=9, color=COLOR_ACCENT)
-    ax2.set_ylabel("Taux 10 ans (%)", fontsize=9, color=COLOR_YIELD)
-    ax2.tick_params(colors=COLOR_YIELD, labelsize=9)
+    ax2.set_ylabel("Taux 10 ans (%)", fontsize=9, color="#888888")
+    ax2.tick_params(colors="#888888", labelsize=9)
     ax2.spines["top"].set_visible(False)
 
     ax.set_title("Dollar pondéré par les échanges vs taux 10 ans US",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
-
-    handles = [line_dollar, line_yield]
-    ax.legend(handles, [h.get_label() for h in handles], loc="upper left",
-              fontsize=8.5, frameon=False)
-
-    pct = compute_percentile_rank(df["dollar_index"])
-    ax.plot(last_row["date"], last_row["dollar_index"], marker="o", markersize=5,
-            color=COLOR_ACCENT, zorder=5)
-    ax.annotate(
-        f"{last_row['dollar_index']:.1f}\nPercentile {HISTORY_YEARS} ans: {pct:.0f}e",
-        xy=(last_row["date"], last_row["dollar_index"]),
-        xytext=(10, 0), textcoords="offset points",
-        fontsize=8.5, color=COLOR_ACCENT, fontweight="bold", va="center",
-    )
 
     add_source_footer(
         fig,
@@ -115,9 +107,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "20_dollar_index_vs_10y_yield.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path, handles=[line_dollar, line_yield])
 
     print(f"[20_dollar_index_vs_10y_yield] Graphique sauvegardé: {out_path}")
     return out_path

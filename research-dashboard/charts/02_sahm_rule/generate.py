@@ -22,7 +22,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle, highlight_last_point, COLOR_ACCENT
+    add_freshness_subtitle, mark_last_point, format_last_value_label,
+    finalize_chart, COLOR_ACCENT, COLOR_SECOND
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
 
@@ -55,25 +56,21 @@ def generate():
     fig, ax = setup_figure()
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
+    last_row = df.iloc[-1]
+    status = "SEUIL FRANCHI" if last_row["sahm_indicator"] >= SAHM_THRESHOLD else "sous le seuil"
     ax.plot(df["date"], df["sahm_indicator"], color=COLOR_ACCENT, linewidth=2.0,
-            label="Indicateur Sahm")
-    ax.axhline(SAHM_THRESHOLD, color="#c0392b", linewidth=1.2, linestyle="--",
+            label=format_last_value_label("Indicateur Sahm",
+                                          f"{last_row['sahm_indicator']:.2f} ({status})"))
+    ax.axhline(SAHM_THRESHOLD, color=COLOR_SECOND, linewidth=1.2, linestyle="--",
                label=f"Seuil de déclenchement ({SAHM_THRESHOLD})")
     ax.axhline(0, color="#999999", linewidth=0.8)
+    mark_last_point(ax, last_row["date"], last_row["sahm_indicator"])
 
-    last_row = df.iloc[-1]
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("Points de %", fontsize=9)
     ax.set_title("Sahm Rule Recession Indicator",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
-    ax.legend(loc="upper left", fontsize=8.5, frameon=False)
-
-    status = "SEUIL FRANCHI" if last_row["sahm_indicator"] >= SAHM_THRESHOLD else "sous le seuil"
-    highlight_last_point(
-        ax, last_row["date"], last_row["sahm_indicator"],
-        value_label=f"{last_row['sahm_indicator']:.2f} ({status})",
-    )
 
     add_source_footer(
         fig, "Source: FRED (UNRATE) | Calcul: MM3(chômage) - min12M(MM3)",
@@ -85,9 +82,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "02_sahm_rule.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path)
 
     print(f"[02_sahm_rule] Graphique sauvegardé: {out_path}")
     return out_path

@@ -11,12 +11,50 @@ import matplotlib.transforms as transforms
 import pandas as pd
 import numpy as np
 
-# --- Palette -----------------------------------------------------------------
-COLOR_ACCENT = "#1a3a5c"      # bleu marine sobre, couleur principale
+# Le projet n'utilise jamais la notation mathématique de matplotlib, mais
+# ses labels contiennent souvent des montants avec "$" (ex: "5.70 T$") --
+# sans ceci, une PAIRE de "$" dans un même texte (ex: un label de légende
+# "($T, éch. gauche) : 5.70 T$") bascule silencieusement le texte entre les
+# deux en italique mathématique. Désactivé globalement, une fois pour toutes.
+plt.rcParams["text.parse_math"] = False
+
+# --- Palette sémantique -------------------------------------------------------
+# UNE seule convention de couleurs pour tout le projet, par RÔLE de série --
+# jamais de couleur ad hoc dans un generate.py. Le lecteur du rapport apprend
+# la convention une fois et la retrouve sur chaque graphique :
+#   - série principale        -> COLOR_ACCENT (bleu marine, trait plein)
+#   - deuxième série          -> COLOR_SECOND (rouge brique)
+#   - troisième série         -> COLOR_THIRD (bleu clair)
+#   - série de référence/contexte (ex: S&P 500 en superposition, taux
+#     nominal derrière un taux réel) -> COLOR_BENCHMARK (gris, pointillés)
+#   - seuils/lignes d'alerte  -> COLOR_SECOND en pointillés
+#   - palettes catégorielles (11 secteurs GICS, tickers, pays) -> tab20,
+#     indexée par ordre alphabétique (voir _sector_color_map des charts 11/12/23)
+COLOR_ACCENT = "#1a3a5c"      # bleu marine sobre, série principale
+COLOR_SECOND = "#c0392b"      # rouge brique, deuxième série / seuils d'alerte
+COLOR_THIRD = "#8fb8d8"       # bleu clair, troisième série
+COLOR_BENCHMARK = "#aaaaaa"   # gris, série de référence/contexte (pointillés)
 COLOR_ACCENT_LIGHT = "#5b8ab8"
 COLOR_GRID = "#e0e0e0"
 COLOR_RECESSION = "#d0d0d0"
 COLOR_TEXT = "#333333"
+
+# --- Géométrie unique ---------------------------------------------------------
+# Tous les graphiques du projet partagent exactement la même taille de figure
+# ET les mêmes marges (pas de tight_layout, qui ajuste les marges au contenu
+# et donne des zones de tracé de tailles légèrement différentes d'un chart à
+# l'autre). Résultat : chaque PNG a la zone de tracé au même endroit, à la
+# même taille -- alignement parfait dans le rapport PDF.
+FIGSIZE = (10, 6.3)
+SAVE_DPI = 150
+# Marges figure (fractions) : la bande du bas accueille les étiquettes de
+# l'axe X, puis la légende (toujours SOUS le graphique, jamais dans la zone
+# de tracé), puis le footer de source.
+_MARGINS = dict(left=0.08, right=0.92, top=0.87, bottom=0.22)
+# Ancre verticale de la légende, en fraction d'axes sous l'axe X
+# (l'espace [axe X -> bas de figure] fait 0.22 de la figure : étiquettes de
+# dates ~0.04, légende ~0.10, footer le reste).
+_LEGEND_Y_ANCHOR = -0.10
 
 # Dates des récessions US (NBER), pour les bandes grisées en fond.
 # À mettre à jour si besoin — source: NBER Business Cycle Dating Committee.
@@ -28,9 +66,13 @@ NBER_RECESSIONS = [
 ]
 
 
-def setup_figure(figsize=(10, 6)):
-    """Crée une figure/axe avec le style de base du projet."""
-    fig, ax = plt.subplots(figsize=figsize)
+def setup_figure():
+    """
+    Crée une figure/axe avec le style de base du projet. La taille est
+    volontairement NON paramétrable : tous les graphiques du rapport doivent
+    avoir exactement la même géométrie (voir FIGSIZE/_MARGINS ci-dessus).
+    """
+    fig, ax = plt.subplots(figsize=FIGSIZE)
     ax.set_facecolor("white")
     fig.patch.set_facecolor("white")
     ax.grid(True, color=COLOR_GRID, linewidth=0.7, alpha=0.8)
@@ -78,14 +120,19 @@ def add_recession_bands(ax, date_min=None, date_max=None, label_first=True):
 
 def add_source_footer(fig, source_text: str, as_of_date=None):
     """
-    Ajoute une mention de source en bas de la figure, petit texte gris,
-    avec assez de marge pour ne jamais être coupée.
+    Ajoute une mention de source en bas de la figure, petit texte gris.
+    Le texte est automatiquement replié sur plusieurs lignes s'il est trop
+    long pour la largeur de la figure -- jamais tronqué à droite, quelle
+    que soit la longueur du texte de source d'un chart.
     """
+    import textwrap
     text = source_text
     if as_of_date is not None:
         date_str = pd.to_datetime(as_of_date).strftime("%d/%m/%Y")
         text = f"{source_text} | Données au {date_str}"
-    fig.text(0.02, 0.015, text, fontsize=7.5, color="#888888", ha="left")
+    # ~155 caractères tiennent sur la largeur utile en fontsize 7.5
+    wrapped = "\n".join(textwrap.wrap(text, width=155))
+    fig.text(0.02, 0.005, wrapped, fontsize=7.5, color="#888888", ha="left", va="bottom")
 
 
 def format_date_axis(ax, tight_to_last_point=None):
@@ -103,30 +150,37 @@ def format_date_axis(ax, tight_to_last_point=None):
         ax.set_xlim(current_min, new_max)
 
 
-def highlight_last_point(ax, x_last, y_last, value_label: str, color=None, offset=(8, 0)):
+def mark_last_point(ax, x_last, y_last, color=None):
     """
-    Marque visuellement le dernier point d'une série (point plein + valeur
-    affichée juste à côté), pour que l'œil trouve immédiatement où s'arrête
-    la courbe — pratique standard des charts de recherche.
+    Marque le dernier point d'une série d'un point plein -- SANS texte.
 
-    offset=(dx, dy) : décalage en points de l'étiquette par rapport au point.
-    Augmente dy si l'étiquette chevauche une ligne ou la légende sur un
-    graphique donné (à ajuster à la main, cas par cas, directement dans le
-    generate.py concerné -- ne change rien pour les autres graphiques).
+    Règle du projet : AUCUN texte dans la zone de tracé. La valeur du
+    dernier point (et son percentile) vont dans le label de légende de la
+    série (voir format_last_value_label), la légende étant rendue sous le
+    graphique par finalize_chart. Un texte posé au bout d'une courbe finit
+    toujours par chevaucher une autre courbe ou un axe pour certaines
+    valeurs de données -- impossible à garantir sur un projet qui doit
+    tourner des années sans intervention manuelle.
     """
     if color is None:
         color = COLOR_ACCENT
     ax.plot(x_last, y_last, marker="o", markersize=5, color=color, zorder=5)
-    ax.annotate(
-        value_label,
-        xy=(x_last, y_last),
-        xytext=offset,
-        textcoords="offset points",
-        fontsize=9,
-        color=color,
-        fontweight="bold",
-        va="center",
-    )
+
+
+def format_last_value_label(name: str, value_str: str, series: pd.Series = None,
+                            years_label: str = None) -> str:
+    """
+    Construit un label de légende enrichi de la dernière valeur, et
+    optionnellement du percentile historique de la série :
+        "Taux réel : 1.2% (78e pct 10 ans)"
+    C'est le remplaçant des anciennes annotations au bout des courbes.
+    """
+    label = f"{name} : {value_str}"
+    if series is not None:
+        pct = compute_percentile_rank(series)
+        suffix = f" {years_label}" if years_label else ""
+        label += f" ({pct:.0f}e pct{suffix})"
+    return label
 
 
 def add_freshness_subtitle(ax, as_of_date):
@@ -151,34 +205,38 @@ def compute_percentile_rank(series: pd.Series) -> float:
     return float((series < last_value).mean() * 100)
 
 
-def annotate_last_point_percentile(ax, x_last, y_last, series: pd.Series, years_label: str = "10 ans",
-                                     value_label: str = None, offset=(10, 0)):
+def finalize_chart(fig, ax, out_path: str, handles=None, labels=None,
+                   legend_ncol: int = 2, note: str = None):
     """
-    Marque le dernier point (point plein) et affiche juste à côté la valeur
-    actuelle + son percentile historique, sur deux lignes, bien accroché au
-    point (pas flottant dans le vide comme avant).
+    Étape finale unique de TOUS les graphiques du projet :
+      - légende horizontale SOUS la zone de tracé (jamais dedans -- elle ne
+        peut donc jamais masquer de données, quelles que soient les valeurs
+        futures des séries)
+      - note optionnelle (repère hors échelle, chiffre-clé...) rendue dans
+        la même bande basse, alignée à droite -- même garantie
+      - marges FIXES identiques pour tous les charts (pas de tight_layout) :
+        chaque PNG a sa zone de tracé exactement au même endroit et à la
+        même taille
+      - sauvegarde + fermeture de la figure
 
-    offset=(dx, dy) : décalage en points de l'étiquette par rapport au point.
-    À ajuster à la main dans le generate.py concerné si l'étiquette chevauche
-    autre chose sur un graphique précis (ex: offset=(10, 25) pour la
-    remonter, offset=(-90, 15) pour la mettre à gauche du point plutôt qu'à
-    droite).
+    handles/labels : à passer explicitement pour les charts à deux axes
+    (twinx), où les lignes vivent sur deux axes différents. Par défaut,
+    reprend les handles de `ax`.
     """
-    pct = compute_percentile_rank(series)
-    ax.plot(x_last, y_last, marker="o", markersize=5, color=COLOR_ACCENT, zorder=5)
+    if handles is None:
+        handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(
+            handles, labels if labels is not None else [h.get_label() for h in handles],
+            loc="upper left", bbox_to_anchor=(0.0, _LEGEND_Y_ANCHOR),
+            ncol=legend_ncol, fontsize=8.5, frameon=False, borderaxespad=0,
+            columnspacing=1.3, handlelength=1.6, handletextpad=0.5,
+        )
+    if note:
+        fig.text(_MARGINS["right"], 0.075, note, fontsize=8, ha="right",
+                 va="bottom", style="italic", color="#666666")
 
-    lines = []
-    if value_label is not None:
-        lines.append(value_label)
-    lines.append(f"Percentile {years_label}: {pct:.0f}e")
-
-    ax.annotate(
-        "\n".join(lines),
-        xy=(x_last, y_last),
-        xytext=offset,
-        textcoords="offset points",
-        fontsize=8.5,
-        color=COLOR_ACCENT,
-        fontweight="bold",
-        va="center",
-    )
+    fig.subplots_adjust(**_MARGINS)
+    fig.savefig(out_path, dpi=SAVE_DPI)
+    plt.close(fig)
+    return out_path

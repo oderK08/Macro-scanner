@@ -31,11 +31,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from common.fred_client import get_series
 from common.chart_style import (
     setup_figure, add_recession_bands, add_source_footer, format_date_axis,
-    add_freshness_subtitle, compute_percentile_rank, COLOR_ACCENT
+    add_freshness_subtitle, mark_last_point, format_last_value_label,
+    finalize_chart, COLOR_ACCENT, COLOR_SECOND
 )
 from common.config import get_current_period_label, OUTPUT_DIR, HISTORY_YEARS
-
-COLOR_BREAKEVEN = "#c8801a"
 
 
 def compute_real_yield_breakeven(years: int = HISTORY_YEARS) -> pd.DataFrame:
@@ -67,47 +66,33 @@ def generate():
     fig, ax = setup_figure()
     add_recession_bands(ax, date_min=df["date"].min(), date_max=df["date"].max())
 
+    last_row = df.iloc[-1]
     ax.plot(df["date"], df["real_yield"], color=COLOR_ACCENT, linewidth=1.6,
-            label="Taux réel 10 ans (TIPS)", zorder=3)
-    ax.plot(df["date"], df["breakeven"], color=COLOR_BREAKEVEN, linewidth=1.6,
-            label="Breakeven d'inflation 10 ans", zorder=2)
+            label=format_last_value_label("Taux réel 10 ans (TIPS)", f"{last_row['real_yield']:.2f}%",
+                                          series=df["real_yield"], years_label=f"{HISTORY_YEARS} ans"),
+            zorder=3)
+    ax.plot(df["date"], df["breakeven"], color=COLOR_SECOND, linewidth=1.6,
+            label=format_last_value_label("Breakeven d'inflation 10 ans",
+                                          f"{last_row['breakeven']:.2f}%"),
+            zorder=2)
 
     # Zéro : sous cette ligne, le taux réel est négatif (répression financière)
     ax.axhline(0, color="#555555", linewidth=0.9, linestyle="--", zorder=1)
     # Repère 2% : l'objectif d'inflation de la Fed, référence naturelle du breakeven
-    ax.axhline(2, color=COLOR_BREAKEVEN, linewidth=0.7, linestyle=":", alpha=0.6, zorder=1)
+    ax.axhline(2, color=COLOR_SECOND, linewidth=0.7, linestyle=":", alpha=0.6, zorder=1)
+    mark_last_point(ax, last_row["date"], last_row["real_yield"])
+    mark_last_point(ax, last_row["date"], last_row["breakeven"], color=COLOR_SECOND)
 
-    last_row = df.iloc[-1]
     format_date_axis(ax, tight_to_last_point=last_row["date"])
     ax.set_ylabel("%", fontsize=9)
     ax.set_title("Taux réel 10 ans vs anticipations d'inflation (breakeven 10 ans)",
                  fontsize=13, fontweight="bold", color="#222222", loc="left")
     add_freshness_subtitle(ax, last_row["date"])
-    ax.legend(loc="upper left", fontsize=8.5, frameon=False)
-
-    # Derniers points des deux séries, chacun dans sa couleur
-    pct_real = compute_percentile_rank(df["real_yield"])
-    ax.plot(last_row["date"], last_row["real_yield"], marker="o", markersize=5,
-            color=COLOR_ACCENT, zorder=5)
-    ax.annotate(
-        f"{last_row['real_yield']:.2f}%\nPercentile {HISTORY_YEARS} ans: {pct_real:.0f}e",
-        xy=(last_row["date"], last_row["real_yield"]),
-        xytext=(10, -5), textcoords="offset points",
-        fontsize=8.5, color=COLOR_ACCENT, fontweight="bold", va="top",
-    )
-    ax.plot(last_row["date"], last_row["breakeven"], marker="o", markersize=5,
-            color=COLOR_BREAKEVEN, zorder=5)
-    ax.annotate(
-        f"{last_row['breakeven']:.2f}%",
-        xy=(last_row["date"], last_row["breakeven"]),
-        xytext=(10, 5), textcoords="offset points",
-        fontsize=8.5, color=COLOR_BREAKEVEN, fontweight="bold", va="bottom",
-    )
 
     add_source_footer(
         fig,
         "Source: FRED (DFII10, T10YIE) | Taux nominal 10 ans ≈ taux réel + breakeven. "
-        "Pointillé orange: objectif d'inflation Fed (2%)",
+        "Pointillé rouge: objectif d'inflation Fed (2%)",
         as_of_date=last_row["date"],
     )
 
@@ -116,9 +101,7 @@ def generate():
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "18_real_yield_breakeven.png")
 
-    fig.tight_layout(rect=[0, 0.05, 0.97, 0.95])
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
+    finalize_chart(fig, ax, out_path)
 
     print(f"[18_real_yield_breakeven] Graphique sauvegardé: {out_path}")
     return out_path

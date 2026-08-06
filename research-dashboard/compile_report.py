@@ -75,6 +75,10 @@ def _extract_title_and_summary(readme_path: str):
         if line.startswith("# "):
             title = line[2:].strip()
             break
+    # Le numéro du graphique est déjà affiché dans sa propre colonne du
+    # sommaire (préfixe du nom de dossier) : si un README garde un titre à
+    # l'ancienne convention "NN — Titre", on retire le préfixe redondant.
+    title = re.sub(r"^\d+\s*[—–-]\s*", "", title)
 
     summary_lines = []
     capturing = False
@@ -189,7 +193,9 @@ def build_report(period_label: str = None, output_path: str = None):
             png_path = os.path.join(charts_output_dir, png_candidates[0])
             analysis_text = commentaries.get(chart_dir, "").strip()
             text = analysis_text if analysis_text else fallback_summary
-            toc_rows.append([num_prefix, title, "Inclus"])
+            # Pas de mention "Inclus" : être dans le sommaire suffit, seule
+            # l'absence d'un graphique mérite une mention explicite.
+            toc_rows.append([num_prefix, title, ""])
             chart_pages.append((theme, chart_dir, png_path, title, text))
         else:
             toc_rows.append([num_prefix, title, "Non disponible cette période"])

@@ -12,3 +12,7 @@ python-dateutil>=2.8,<3
 lxml>=5.0,<7
 reportlab>=4.0,<5
 Pillow>=10.0
+# SDK Anthropic pour le commentaire IA des graphiques (generate_commentary.py).
+# Optionnel à l'exécution : sans ANTHROPIC_API_KEY, le script se retire
+# proprement et le rapport garde les résumés statiques des README.
+anthropic>=0.60,<2

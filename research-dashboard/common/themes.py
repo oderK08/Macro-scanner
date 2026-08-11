@@ -17,6 +17,11 @@ qu'un oubli de classement saute aux yeux au lieu de disparaître du rapport.
 """
 
 THEMES = [
+    ("Momentum global & indicateurs avancés", [
+        "29_oecd_cli_quadrant",
+        "30_cfnai_activity_index",
+        "32_copper_gold_ratio",
+    ]),
     ("Politique monétaire & conditions financières", [
         "01_real_fed_funds_rate",
         "06_nfci_financial_conditions",
@@ -27,6 +32,7 @@ THEMES = [
     ]),
     ("Cycle & marché du travail", [
         "28_gdpnow_vs_gdp",
+        "31_initial_jobless_claims",
         "02_sahm_rule",
         "05_jolts_quits_vs_wages",
     ]),
